@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+
+# Virtual environment
+venv/
+.venv/
+
+# Generated outputs (train lại được từ code + data/raw, không cần commit)
+outputs/
+data/processed/
+
+# Jupyter
+.ipynb_checkpoints/
