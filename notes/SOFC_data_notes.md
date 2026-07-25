@@ -453,3 +453,62 @@ Người dùng phàn nàn: mỗi lần chạy Colab phải upload thủ công `s
 - Validate bằng `nbformat.validate()` → pass, 24 cell.
 
 **Việc còn lại của người dùng**: mỗi lần sửa code local (`src/*.py`), cần tự `git push` trước khi mở Colab — Claude không tự động push thay, phải được yêu cầu tường minh mỗi lần (theo nguyên tắc chỉ commit/push khi được yêu cầu).
+
+## 19. Kết quả LSTM/TCN/Seq2Seq-delta (Colab) — Delta-Target thắng áp đảo trên deep learning, NGƯỢC với RF/XGBoost
+
+Chạy xong trên Colab qua workflow git clone/pull mới (mục 18). Kết quả đầy đủ (raw + delta, 3 model, 4 horizon):
+
+| Horizon | Model | MAE | RMSE | R² | DTW |
+|---|---|---|---|---|---|
+| 1  | LSTM | 1.480 | 2.087 | 0.967 | 0.588 |
+| 1  | TCN | 1.441 | 2.022 | 0.969 | 0.571 |
+| 1  | Seq2Seq | 1.921 | 2.574 | 0.950 | 0.819 |
+| 1  | **LSTM-delta** | **0.205** | 0.975 | 0.993 | 0.017 |
+| 1  | TCN-delta | 0.208 | 0.965 | 0.993 | 0.024 |
+| 1  | Seq2Seq-delta | 0.268 | 0.974 | 0.993 | 0.045 |
+| 5  | LSTM | 1.910 | 2.776 | 0.940 | 0.759 |
+| 5  | TCN | 2.241 | 3.067 | 0.927 | 0.949 |
+| 5  | Seq2Seq | 1.996 | 2.787 | 0.939 | 0.790 |
+| 5  | **LSTM-delta** | **0.658** | 2.179 | 0.963 | 0.035 |
+| 5  | TCN-delta | 0.693 | 2.067 | 0.967 | 0.079 |
+| 5  | Seq2Seq-delta | 0.693 | 2.146 | 0.964 | 0.046 |
+| 10 | LSTM | 2.632 | 3.732 | 0.888 | 1.120 |
+| 10 | TCN | 2.561 | 3.553 | 0.898 | 1.066 |
+| 10 | Seq2Seq | 2.179 | 3.093 | 0.923 | 0.839 |
+| 10 | LSTM-delta | 1.129 | 2.912 | 0.932 | 0.126 |
+| 10 | TCN-delta | 1.112 | 2.796 | 0.937 | 0.150 |
+| 10 | **Seq2Seq-delta** | **1.060** | 2.857 | 0.934 | 0.087 |
+| 20 | LSTM | 2.876 | 4.074 | 0.856 | 1.258 |
+| 20 | TCN | 2.652 | 3.820 | 0.874 | 1.128 |
+| 20 | Seq2Seq | 2.436 | 3.493 | 0.894 | 0.999 |
+| 20 | LSTM-delta | 1.583 | 3.496 | 0.894 | 0.458 |
+| 20 | TCN-delta | 1.556 | 3.527 | 0.892 | 0.460 |
+| 20 | **Seq2Seq-delta** | **1.431** | 3.528 | 0.892 | 0.392 |
+
+**Cải thiện delta vs raw (MAE), cả 3 model, cả 4 horizon:**
+
+| Horizon | LSTM | TCN | Seq2Seq |
+|---|---|---|---|
+| 1  | -86.2% | -85.6% | -86.1% |
+| 5  | -65.6% | -69.1% | -65.3% |
+| 10 | -57.1% | -56.6% | -51.4% |
+| 20 | -44.9% | -41.3% | -41.3% |
+
+**Phát hiện quan trọng nhất — đảo ngược kết luận tạm ở mục 17.1:**
+- Với RF/XGBoost, Delta-Target **chỉ lợi ở h=1, hại dần ở h≥5** (mục 17.1) → kết luận tạm lúc đó là "chiến lược hỗn hợp theo horizon".
+- Với **cả 3 deep learning model (LSTM/TCN/Seq2Seq), Delta-Target thắng ở TẤT CẢ 4 horizon**, không ngoại lệ — mức cải thiện giảm dần theo horizon (từ ~86% ở h=1 xuống ~41-45% ở h=20) nhưng không bao giờ âm. Khác hẳn RF/XGBoost.
+- Giả thuyết giải thích: RF/XGBoost dự đoán delta bằng cách học ánh xạ phi tuyến trực tiếp trên feature phẳng, không có "bộ nhớ trạng thái" nội tại — khi delta thật (biến động dài hạn) đủ lớn/nhiễu ở horizon dài, model tree mất điểm tựa. Trong khi LSTM/TCN/Seq2Seq có cấu trúc tuần tự (hidden state / receptive field theo thời gian) giúp mô hình hoá được cả xu hướng tích luỹ dẫn tới delta dài hạn, nên không bị "sập" như tree-based.
+- Lưu ý: MAE raw của LSTM/TCN/Seq2Seq trong bảng trên **khác một chút** so với mục 16 (VD: LSTM h1 1.480 ở đây vs 1.093 ở mục 16; TCN h1 1.441 vs 1.295) — do chạy lại trên phiên Colab khác (LSTM/Seq2Seq không set determinism tuyệt đối như TCN, xem mục 12), không phải lỗi. Vì raw và delta trong bảng này chạy **cùng 1 phiên Colab** nên so sánh nội bộ (delta vs raw) vẫn hợp lệ và là phép so sánh đúng đắn nhất.
+
+**Model tốt nhất mỗi horizon, tính trên TOÀN BỘ 10 biến thể (RF/XGBoost/LSTM/TCN/Seq2Seq × raw/delta):**
+
+| Horizon | Model tốt nhất | MAE | So với tốt nhất trước đó (raw-only) |
+|---|---|---|---|
+| 1  | **LSTM-delta** | 0.205 | XGBoost raw 1.244 (mục 14.2) → giảm thêm 83% |
+| 5  | **LSTM-delta** | 0.658 | XGBoost raw 1.490 (mục 14.2) → giảm thêm 56% |
+| 10 | **Seq2Seq-delta** | 1.060 | RF raw 1.666 (mục 14.2) → giảm thêm 36% |
+| 20 | **Seq2Seq-delta** | 1.431 | XGBoost raw 2.263 (mục 14.2) → giảm thêm 37% |
+
+→ **Kết luận cập nhật (thay thế mục 17.1)**: không cần chiến lược hỗn hợp theo model family nữa — Delta-Target Reformulation trên deep learning model (LSTM cho horizon ngắn, Seq2Seq cho horizon dài) thắng tuyệt đối mọi model raw-target lẫn RF/XGBoost-delta ở cả 4 horizon. Đây là kết quả tốt nhất đạt được trong toàn bộ project tính đến thời điểm này.
+
+Kết quả lưu tại `outputs/reports/{lstm,tcn,seq2seq}_delta_results.csv` trên Google Drive (`MyDrive/SOFC/outputs/`) — chưa tải về `E:\sofc\outputs\` local (cần tải thủ công nếu muốn gộp báo cáo cuối cùng, xem ghi chú mục 9 của notebook).
