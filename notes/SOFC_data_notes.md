@@ -512,3 +512,13 @@ Chạy xong trên Colab qua workflow git clone/pull mới (mục 18). Kết qu�
 → **Kết luận cập nhật (thay thế mục 17.1)**: không cần chiến lược hỗn hợp theo model family nữa — Delta-Target Reformulation trên deep learning model (LSTM cho horizon ngắn, Seq2Seq cho horizon dài) thắng tuyệt đối mọi model raw-target lẫn RF/XGBoost-delta ở cả 4 horizon. Đây là kết quả tốt nhất đạt được trong toàn bộ project tính đến thời điểm này.
 
 Kết quả lưu tại `outputs/reports/{lstm,tcn,seq2seq}_delta_results.csv` trên Google Drive (`MyDrive/SOFC/outputs/`) — chưa tải về `E:\sofc\outputs\` local (cần tải thủ công nếu muốn gộp báo cáo cuối cùng, xem ghi chú mục 9 của notebook).
+
+## 20. Gộp kết quả Colab (LSTM/TCN/Seq2Seq) với kết quả local (RF/XGBoost)
+
+Người dùng tải `outputs-20260725T140304Z-1-001.zip` (42 file: model `.pt`, predictions `.npz`, report `.csv`) từ Drive về `E:\sofc\outputs\`, giải nén đè vào đúng cấu trúc `outputs/models_saved/`, `outputs/predictions_cache/`, `outputs/reports/`.
+
+- 6 thư mục `models_saved/{lstm,tcn,seq2seq}(_delta)` và `predictions_cache/{...}` trước đó **rỗng** (chỉ là khung thư mục từ lúc tách file ở mục 15) → giải nén không đè mất gì.
+- 3 file `outputs/reports/{lstm,tcn,seq2seq}_results.csv` **bị ghi đè**: số liệu cũ (chạy trước, đã ghi ở mục 16) → số liệu mới khớp mục 19 (cùng phiên Colab với bản delta, nên là bộ so sánh raw-vs-delta chuẩn nhất, đã lưu làm bản chính thức).
+- Gộp cả 10 file report (RF/XGBoost/LSTM/TCN/Seq2Seq × raw/delta) thành `outputs/reports/combined_all_results.csv` (40 dòng = 10 model × 4 horizon) bằng script Python (module `csv` chuẩn, không có `pandas` trong env hệ thống dùng để chạy notebook local).
+- Xác nhận model tốt nhất mỗi horizon khớp đúng mục 19: **LSTM-delta** (h=1: MAE 0.2045, h=5: MAE 0.6579), **Seq2Seq-delta** (h=10: MAE 1.0599, h=20: MAE 1.4309).
+- Xoá file zip tạm sau khi giải nén. `outputs/` local hiện 906MB, đầy đủ cả 10 model (local + Colab), vẫn nằm trong `.gitignore` (không commit).
