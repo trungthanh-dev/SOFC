@@ -522,3 +522,23 @@ Người dùng tải `outputs-20260725T140304Z-1-001.zip` (42 file: model `.pt`,
 - Gộp cả 10 file report (RF/XGBoost/LSTM/TCN/Seq2Seq × raw/delta) thành `outputs/reports/combined_all_results.csv` (40 dòng = 10 model × 4 horizon) bằng script Python (module `csv` chuẩn, không có `pandas` trong env hệ thống dùng để chạy notebook local).
 - Xác nhận model tốt nhất mỗi horizon khớp đúng mục 19: **LSTM-delta** (h=1: MAE 0.2045, h=5: MAE 0.6579), **Seq2Seq-delta** (h=10: MAE 1.0599, h=20: MAE 1.4309).
 - Xoá file zip tạm sau khi giải nén. `outputs/` local hiện 906MB, đầy đủ cả 10 model (local + Colab), vẫn nằm trong `.gitignore` (không commit).
+
+## 21. Biểu đồ so sánh 10 model theo horizon — `outputs/figures/model_comparison.html`
+
+Dùng skill `dataviz` để vẽ, dựa trên `outputs/reports/combined_all_results.csv` (mục 20).
+
+**Chọn form**: thay vì 1 biểu đồ 10 đường (spaghetti chart, vượt trần categorical 7-8 series và rối vì các đường cắt nhau), chia thành **5 small-multiple panel** (RF, XGBoost, LSTM, TCN, Seq2Seq) — mỗi panel chỉ 2 đường (raw=xanh, delta=cam) trên trục X=horizon (1/5/10/20), trục Y=MAE dùng **chung 1 thang đo** (0-4V) cho cả 5 panel để so sánh độ lớn sai số trực tiếp. Cách này khớp đúng câu hỏi phân tích thật sự ("delta có lợi cho model X không, ở horizon nào") thay vì chỉ liệt kê 10 model cạnh nhau.
+
+**Palette**: chỉ cần 2 màu categorical (raw/delta) dùng lại xuyên suốt 5 panel — chạy `validate_palette.js` cho cả light/dark mode, **PASS toàn bộ 6 check** (CVD ΔE 24.7-32.7, normal-vision ΔE 31.8-33.6, đều vượt xa ngưỡng 8/15 yêu cầu).
+
+**Nội dung trang**:
+- 4 stat tile đầu: model tốt nhất mỗi horizon (khớp bảng ở mục 19).
+- 5 panel line chart, có crosshair + tooltip hover (MAE, R² của cả 2 đường tại horizon hover), caption riêng mỗi panel tóm tắt insight (VD: RF "delta chỉ lợi ở h=1, hại dần từ h≥5"; LSTM "delta thắng ở CẢ 4 horizon").
+- Nút "Xem dạng bảng" mở bảng đầy đủ 40 dòng (MAE/RMSE/R²/DTW) — kênh accessibility dự phòng cho biểu đồ.
+- Hỗ trợ dark mode qua CSS custom properties (`prefers-color-scheme` + `data-theme` override).
+
+**Sự cố khi publish qua Artifact tool**: lần đầu publish lên `claude.ai/code/artifact/...`, người dùng mở link báo "Page not found". Nguyên nhân: link Artifact loại này chỉ xem được qua "Claude Code trên web" (claude.ai/code) — không phải link public thường, cần đúng phiên đăng nhập/nền tảng phù hợp. Vì đang chạy Claude Code CLI (không phải web), link không truy cập được từ trình duyệt thường của người dùng.
+
+**Xử lý**: copy thẳng file HTML đã build (tự chứa toàn bộ CSS/JS, không phụ thuộc mạng) vào `outputs/figures/model_comparison.html` trong project — mở trực tiếp bằng double-click, không cần đăng nhập/internet. Đã xác nhận người dùng mở thành công, biểu đồ hiển thị đúng.
+
+**Ghi chú cho lần sau**: với người dùng dùng Claude Code CLI (không phải claude.ai web/desktop), nên ưu tiên lưu file HTML trực tiếp vào project (`outputs/figures/`) thay vì chỉ publish qua Artifact tool — hoặc làm cả 2 nhưng báo trước rằng link Artifact có thể không mở được ngoài Claude Code web.
