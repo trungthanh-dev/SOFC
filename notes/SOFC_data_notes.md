@@ -612,3 +612,30 @@ Vì `V` gần như không đổi trong 30s-10 phút (h=1..20 bước × 30s = 30
 - Ở delta-target, importance của `V_Lag1` sập xuống còn 2-5% ở mọi horizon — xác nhận Delta-Target **thành công đúng như thiết kế**: xoá bỏ hoàn toàn "lối tắt copy Lag1". Nhưng (22.3) cho thấy sau khi mất chỗ dựa đó, RF/XGBoost **không tìm được tín hiệu thay thế nào tốt hơn** trong 28 feature còn lại — chỉ đơn giản là overfit nhiễu. Delta-Target gỡ bỏ đúng "cái nạng" nhưng không giúp cây quyết định "đi lại" được.
 
 **Kết luận tổng hợp mục 22** (cập nhật lại mục 19): Delta-Target Reformulation không phải một kỹ thuật cải thiện model theo nghĩa chung — nó **thay đổi độ khó bài toán và lộ ra 2 chế độ thất bại khác nhau** của 2 họ model. Với tree-based, bỏ Lag1 chỉ để lộ ra chúng không có tín hiệu thay thế → tệ hơn cả không làm gì. Với deep learning, cơ chế tối ưu hoá tự nhiên hội tụ về gần persistence (an toàn) rồi cộng thêm một chút tín hiệu thật, tăng dần theo horizon — nên nhìn tổng thể, **model có giá trị thực chứng minh được nhiều nhất là Seq2Seq-delta ở horizon dài (h=10/h=20)**, còn kết quả "ấn tượng" ở h=1/h=5 phần lớn phản ánh độ dễ tự nhiên của bài toán ngắn hạn hơn là năng lực học của model.
+
+### 22.5 Làm rõ lại: đây là true forecasting, không phải nowcasting như paper gốc
+
+Người dùng hỏi lại điểm này giữa chừng — nhắc lại rõ (đã có ở mục 7 nhưng dễ bị chìm giữa các bảng số liệu): paper gốc (Beloev et al.) chỉ làm **nowcasting** — dự đoán `V` tại thời điểm `t` từ các cảm biến khác **cũng đo tại chính thời điểm `t`** (biết hết hiện tại, chỉ thiếu đúng 1 giá trị `V`). Toàn bộ Phase 1/2 trở đi của project này (mục 11 trở xuống) là **true forecasting**: dự đoán `V` tại `t+h` chỉ dùng window 20 bước quá khứ tính đến `t`, không có bất kỳ thông tin nào tại hoặc sau `t` — khó hơn về bản chất, và là lý do baseline "persistence" (mục 22.1) mạnh đến vậy (nowcasting của paper không có khái niệm persistence vì không có "trước/sau").
+
+## 23. Trajectory + Residual plot — `outputs/figures/lstm_trajectory_residual.html`
+
+Người dùng nhận xét đúng: phân tích trước giờ (mục 14-22) toàn số liệu tổng hợp (MAE/RMSE/R²/DTW/shrinkage/correlation), chưa có hình ảnh trực quan theo thời gian. Bổ sung 1 biểu đồ mới, dùng lại nguyên `outputs/predictions_cache/{lstm,lstm_delta}/h*.npz` đã có (không train lại) — chọn LSTM làm đại diện (raw vs delta, cả 4 horizon) theo yêu cầu người dùng.
+
+**Cấu trúc**: 4 panel (1 panel/horizon), mỗi panel gồm 2 biểu đồ xếp chồng cùng trục thời gian (phút, trên test run 4, downsample ~550-730/2200 điểm để render mượt, không ảnh hưởng số liệu MAE đã báo cáo):
+- **Trajectory** (trên): V thật (nét xám đậm, ink) vs raw-pred (xanh) vs delta-pred (cam) — dùng lại đúng 2 màu categorical raw/delta đã validate ở mục 21 để nhất quán xuyên suốt project.
+- **Residual** (dưới): V thật − V dự đoán, cùng 2 màu, có đường 0 tham chiếu (nét đứt).
+
+Hover có crosshair + tooltip đọc giá trị chính xác tại từng điểm (cả 2 sub-plot đồng bộ).
+
+**Số liệu residual std đo được (bổ sung góc nhìn mới cho mục 22.3):**
+
+| Horizon | std(residual) raw | std(residual) delta | Delta giảm bao nhiêu |
+|---|---|---|---|
+| 1  | 2.078V | 0.974V | -53% |
+| 5  | 2.719V | 2.176V | -20% |
+| 10 | 3.596V | 2.905V | -19% |
+| 20 | 3.942V | 3.483V | -12% |
+
+Delta-target giảm **độ phân tán** sai số (std residual) ở mọi horizon cho LSTM, không chỉ giảm MAE trung bình — nhất quán với phát hiện shrinkage ở mục 22.3 (LSTM-delta dự đoán thận trọng, bám sát persistence, nên residual co cụm hơn quanh 0). Mức giảm % lớn dần ở horizon ngắn (giống pattern "delta thắng đậm ở h=1/h=5" đã thấy ở MAE trung bình, mục 19).
+
+**Việc còn để mở** (nếu người dùng muốn đào tiếp): chưa vẽ cho RF/XGBoost-delta (nơi mục 22 phát hiện residual thực chất tệ hơn cả persistence — sẽ thấy rõ trực quan là các đoạn "nhiễu vọt" chứ không co cụm như LSTM), và chưa vẽ cho Seq2Seq-delta ở h=20 (nơi có bằng chứng học thật rõ nhất).
