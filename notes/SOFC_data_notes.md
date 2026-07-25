@@ -429,3 +429,27 @@ Kết quả lưu tại `outputs/reports/{rf,xgb}_delta_results.csv`, model tại
 - Delta-Target cải thiện **rõ rệt và nhất quán ở h=1** (MAE giảm 24-34%, R² tăng lên 0.98) — loại bỏ "cheat" chép `V_Lag1` buộc model học biến động thật, nhưng ở h=1 biến động này vẫn nhỏ và dễ học → thắng tuyệt đối so với raw-target.
 - Ngược lại, delta **làm tệ hơn ở mọi horizon dài (5/10/20)**, càng dài càng tệ — rõ nhất là RF h=20: MAE tăng 59%, R² rơi từ 0.893 xuống 0.730. Khác với kỳ vọng ban đầu ("delta có thể cải thiện ổn định LSTM/TCN ở horizon dài" — mục 16), ở RF/XGBoost thì **ngược lại hoàn toàn**: delta chỉ có lợi khi horizon ngắn, vì ở horizon dài biến động (delta thật) đủ lớn và nhiễu để trở nên khó dự đoán hơn chính target gốc — tái tạo `y_hat = anchor + delta_hat` khi đó khuếch đại lỗi thay vì giảm.
 - **Kết luận tạm**: nên dùng chiến lược hỗn hợp theo horizon — delta-target cho h=1 (LSTM-delta hoặc XGBoost-delta), raw-target cho h≥5 (XGBoost/RF raw) — thay vì chọn 1 cách tiếp cận duy nhất cho toàn bộ 4 horizon. Cần chờ kết quả LSTM/TCN/Seq2Seq-delta (Colab) để xem pattern này có lặp lại trên deep learning models hay không, đặc biệt vì LSTM raw đã thắng đậm ở h=1 (mục 16) — delta có thể đẩy nó xuống thấp hơn nữa.
+
+## 18. `E:\sofc` chính thức thành git repo, push GitHub — đổi cách sync Colab
+
+Người dùng phàn nàn: mỗi lần chạy Colab phải upload thủ công `src/` + CSV lên Drive "mệt quá" → chuyển sang mô hình clone/pull như `E:\FCF\FCF_Colab.ipynb`.
+
+**Thực hiện (2026-07-25):**
+- `git init` tại `E:\sofc`, tạo `.gitignore` (loại `outputs/` ~910MB — gồm `models_saved/`, `predictions_cache/`, `reports/`, `figures/` — và `data/processed/`, `__pycache__/`, `.venv/`, `.vscode/`, `.ipynb_checkpoints/`).
+- **Khác biệt quan trọng so với FCF**: `data/raw/DataTime_export.csv` chỉ 16MB (dưới giới hạn 100MB của GitHub) nên **commit thẳng vào git**, không bị gitignore như `data_clean_power/*.parquet` bên FCF. Kết quả: pipeline SOFC trên Colab **không cần bước upload file thủ công nào cả** — sạch hơn cả FCF gốc.
+- Repo: `https://github.com/trungthanh-dev/SOFC` (public, do người dùng tự tạo trên GitHub rồi đưa URL).
+- Commit đầu (`276f30d`): toàn bộ `src/`, `data/raw/*.csv`, `notebooks/`, `notes/`, `.gitignore` — 24 file, không dính secret nào.
+- Push `origin main` thành công ngay từ đầu (không cần force, không có conflict vì repo tạo rỗng).
+
+**Viết lại `notebooks/SOFC_Colab_Forecasting.ipynb`** (commit `1b06387`) theo đúng mẫu `FCF_Colab.ipynb`:
+- Mục 1: mount Drive (giữ nguyên).
+- Mục 2: cấu hình `GITHUB_USERNAME/GITHUB_REPO/GITHUB_TOKEN` (để trống vì repo public) + `DRIVE_PROJECT_DIR = MyDrive/SOFC`.
+- Mục 3: cell tự detect clone-lần-đầu hay pull-lần-sau (y hệt logic FCF).
+- Mục 4: check file cần thiết (giữ lại như bản cũ, nhưng giờ chỉ là bước xác nhận sau khi pull, không phải nhắc upload).
+- Mục 5-6: cài `xgboost`, check GPU (không đổi).
+- Mục 7/7b: chạy `main_lstm.py`/`main_tcn.py`/`main_seq2seq.py` + 3 bản `_delta` (không đổi logic, chỉ đổi số thứ tự mục).
+- Mục 8: gộp bảng kết quả từ `outputs/reports/*.csv` (không đổi).
+- Mục 9: ghi chú — nhấn mạnh workflow mới là `git push` (local) → `git pull` (Colab, chạy lại cell mục 3), không còn upload tay.
+- Validate bằng `nbformat.validate()` → pass, 24 cell.
+
+**Việc còn lại của người dùng**: mỗi lần sửa code local (`src/*.py`), cần tự `git push` trước khi mở Colab — Claude không tự động push thay, phải được yêu cầu tường minh mỗi lần (theo nguyên tắc chỉ commit/push khi được yêu cầu).
