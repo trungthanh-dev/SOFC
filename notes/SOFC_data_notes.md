@@ -542,3 +542,73 @@ Dùng skill `dataviz` để vẽ, dựa trên `outputs/reports/combined_all_resu
 **Xử lý**: copy thẳng file HTML đã build (tự chứa toàn bộ CSS/JS, không phụ thuộc mạng) vào `outputs/figures/model_comparison.html` trong project — mở trực tiếp bằng double-click, không cần đăng nhập/internet. Đã xác nhận người dùng mở thành công, biểu đồ hiển thị đúng.
 
 **Ghi chú cho lần sau**: với người dùng dùng Claude Code CLI (không phải claude.ai web/desktop), nên ưu tiên lưu file HTML trực tiếp vào project (`outputs/figures/`) thay vì chỉ publish qua Artifact tool — hoặc làm cả 2 nhưng báo trước rằng link Artifact có thể không mở được ngoài Claude Code web.
+
+## 22. Đào sâu Delta-Target — script `src/analyze_delta.py`: phát hiện quan trọng, cần hiệu chỉnh lại cách đọc mục 19
+
+Viết script chẩn đoán mới (không train lại gì, chỉ dùng lại `outputs/predictions_cache/*` + `outputs/models_saved/*` đã có), 3 phần:
+
+1. **Persistence floor**: MAE/RMSE/R² khi dự đoán `delta=0` (tức "V không đổi", `y_hat = anchor`) — baseline tối thiểu mọi model phải vượt qua.
+2. **Delta-variance shrinkage**: `std(delta_pred) / std(delta_true)` mỗi model/horizon — đo model có đang "co rúm" dự đoán về gần 0 (shrinkage, ratio << 1) hay dự đoán nhiễu loạn hơn cả tín hiệu thật (ratio > 1) — kèm hệ số tương quan Pearson giữa delta dự đoán và delta thật.
+3. **V_Lag1 feature importance mở rộng** (RF/XGBoost, raw vs delta, cả 4 horizon — mục 14.3 trước đây chỉ làm h=1).
+
+Kết quả lưu tại `outputs/reports/delta_shrinkage_analysis.csv` và `outputs/reports/delta_lag1_importance.csv`.
+
+### 22.1 Persistence floor — baseline "không làm gì" mạnh hơn tưởng tượng rất nhiều
+
+| Horizon | MAE (persistence) | RMSE | R² |
+|---|---|---|---|
+| 1  | 0.2014 | 0.978 | 0.9928 |
+| 5  | 0.7025 | 2.211 | 0.9620 |
+| 10 | 1.1434 | 2.984 | 0.9284 |
+| 20 | 1.6899 | 3.804 | 0.8746 |
+
+Vì `V` gần như không đổi trong 30s-10 phút (h=1..20 bước × 30s = 30s-10 phút), riêng việc "cứ lấy giá trị hiện tại" đã đạt R²=0.87-0.99. Đây chính là numeric floor mà **mọi so sánh trước giờ (mục 14.2, 16, 17.1, 19) chưa đối chiếu tới** — các mục đó chỉ so model với nhau (raw vs raw, delta vs raw cùng family), chưa so với baseline "không học gì".
+
+### 22.2 So từng model-delta với persistence floor — bức tranh khác hẳn mục 19
+
+| Model | h=1 | h=5 | h=10 | h=20 |
+|---|---|---|---|---|
+| **LSTM-delta** | +1.5% (bằng) | **-6.4%** | -1.2% | **-6.3%** |
+| **TCN-delta** | +3.0% (bằng) | -1.4% | -2.7% | **-7.9%** |
+| **Seq2Seq-delta** | +32.9% (**tệ hơn**) | -1.4% | **-7.3%** | **-15.3%** |
+| RF-delta | **+449%** (tệ hơn gấp 5.5 lần) | **+199%** (gấp 3 lần) | +59% | +117% (gấp 2.2 lần) |
+| XGBoost-delta | **+305%** (gấp 4 lần) | +115% | +133% | +62% |
+
+(% dương = MAE model tệ hơn persistence; % âm = model thắng thật.)
+
+**Diễn giải lại toàn bộ câu chuyện delta-target:**
+- **RF-delta và XGBoost-delta tệ hơn baseline "không làm gì" ở MỌI horizon**, có chỗ tệ gấp 5.5 lần (RF-delta h=1). Việc chúng "thắng RF/XGBoost raw" ở mục 17.1 (h=1: -24%/-34%) chỉ là thắng một baseline khác còn tệ hơn nữa (raw-target, vốn cũng thua persistence — xem 22.4), không phải bằng chứng model học được gì thật.
+- **LSTM-delta/TCN-delta chỉ xấp xỉ persistence ở h=1** (+1.5%, +3.0% — coi như hòa, không thắng), bắt đầu thắng thật (âm) từ h=5 trở đi, nhưng biên độ thắng khiêm tốn (1-8%) — hoàn toàn khác ấn tượng "thắng áp đảo 86% MAE" nếu chỉ so với raw-target model ở mục 19.
+- **Seq2Seq-delta là trường hợp thú vị nhất**: THUA persistence rõ rệt ở h=1 (+33%, tệ hơn thấy rõ) nhưng **thắng thật và tăng dần** theo horizon, đỉnh điểm **-15.3% ở h=20** — đây là bằng chứng thuyết phục nhất trong cả 10 biến thể model rằng có tồn tại "học thật" chứ không chỉ ăn theo độ dễ của bài toán.
+- **Kết luận mới**: phần lớn "thành tích" MAE thấp ở mục 19 (đặc biệt ở h=1, h=5) đến từ việc bài toán tự nó đã dễ (V ít đổi trong thời gian ngắn) chứ không phải model học được động lực SOFC thật. Giá trị thực sự của Delta-Target nằm ở **Seq2Seq-delta tại horizon dài (h=10, h=20)** — nơi duy nhất cải thiện rõ ràng và tăng dần so với baseline trivial.
+
+### 22.3 Delta-variance shrinkage — cơ chế giải thích TẠI SAO tree và DL phản ứng ngược nhau
+
+| Model | h=1 shrink | h=5 shrink | h=10 shrink | h=20 shrink | h=1 corr | h=20 corr |
+|---|---|---|---|---|---|---|
+| RF-delta | 1.39 | 1.09 | 0.78 | **1.24** | 0.099 | 0.265 |
+| XGBoost-delta | 1.33 | 0.79 | 1.01 | 0.92 | 0.101 | 0.324 |
+| LSTM-delta | **0.043** | 0.134 | 0.457 | 0.409 | 0.107 | 0.396 |
+| TCN-delta | **0.105** | 0.213 | 0.275 | 0.309 | 0.178 | 0.373 |
+| Seq2Seq-delta | **0.168** | 0.221 | 0.255 | 0.251 | 0.146 | 0.404 |
+
+(`shrink = std(delta_pred)/std(delta_true)`; 1.0 = biên độ dự đoán khớp biên độ thật; <<1 = model "co rúm" về gần 0; >1 = model dự đoán nhiễu loạn hơn cả tín hiệu thật.)
+
+**Cơ chế phát hiện được — giải thích trực tiếp pattern ở mục 19:**
+- **RF/XGBoost-delta có shrink ratio ≈ 0.8-1.4 (gần hoặc vượt 1)** nhưng **correlation cực thấp (0.10-0.32)** — nghĩa là chúng dự đoán delta với **biên độ đúng cỡ nhưng gần như ngẫu nhiên**, không bám theo delta thật. Đây là dấu hiệu **overfit nhiễu**: cây quyết định cố "khớp" một target vốn có tỉ lệ tín hiệu/nhiễu rất thấp (delta thật phần lớn nhỏ, thỉnh thoảng có swing lớn khó đoán), kết quả là thêm nhiễu cộng dồn lên `anchor` — giải thích tại sao chúng tệ hơn cả persistence.
+- **LSTM/TCN/Seq2Seq-delta có shrink ratio rất thấp (0.04-0.46)**: mô hình gradient-descent (loss Huber/MSE + early stopping) tự nhiên hội tụ về chiến lược "an toàn" — dự đoán delta gần 0 hầu hết thời gian — vì với target nhiễu cao, đây là điểm tối ưu cục bộ giảm expected loss. Điều này **vô tình tái tạo lại chính baseline persistence** (dự đoán ≈0 = giống hệt persistence) nên MAE của chúng bám sát persistence floor (22.2) — không phải vì chúng "học dynamics" mà vì cơ chế tối ưu hoá tự nhiên hội tụ về vùng an toàn đó.
+- **Correlation tăng dần theo horizon ở cả 5 model** (VD Seq2Seq-delta: 0.146→0.404 từ h=1→h=20) — gợi ý tín hiệu delta thật (không phải nhiễu) chiếm tỉ trọng lớn hơn khi horizon dài (delta biến động đủ lớn để có cấu trúc học được), khớp với việc Seq2Seq-delta thắng persistence rõ nhất ở h=20.
+
+### 22.4 V_Lag1 importance mở rộng — persistence bias TĂNG DẦN theo horizon, không chỉ ở h=1
+
+| Family | Variant | h=1 | h=5 | h=10 | h=20 |
+|---|---|---|---|---|---|
+| RandomForest | raw | 0.524 | 0.671 | 0.747 | **0.847** |
+| RandomForest | delta | 0.033 | 0.037 | 0.048 | 0.028 |
+| XGBoost | raw | 0.090 | 0.245 | 0.282 | **0.443** |
+| XGBoost | delta | 0.030 | 0.023 | 0.026 | 0.020 |
+
+- Ở raw-target, tỉ trọng importance dồn vào `V_Lag1` **tăng liên tục theo horizon** (RF: 52%→85%, XGBoost: 9%→44%) — càng horizon dài, model càng "bám" vào giá trị gần nhất làm chỗ dựa duy nhất, vì 28 feature cảm biến còn lại càng lúc càng ít giải thích được biến động xa. Đây là bằng chứng số liệu trực tiếp (không chỉ suy luận) rằng **persistence bias không phải hiện tượng chỉ ở h=1** (như mục 14.3 mô tả) mà **nặng dần theo horizon** — và vẫn không đủ để raw-target RF/XGBoost thắng nổi persistence thật (mục 22.2 cho XGBoost/RF raw, xem bên dưới).
+- Ở delta-target, importance của `V_Lag1` sập xuống còn 2-5% ở mọi horizon — xác nhận Delta-Target **thành công đúng như thiết kế**: xoá bỏ hoàn toàn "lối tắt copy Lag1". Nhưng (22.3) cho thấy sau khi mất chỗ dựa đó, RF/XGBoost **không tìm được tín hiệu thay thế nào tốt hơn** trong 28 feature còn lại — chỉ đơn giản là overfit nhiễu. Delta-Target gỡ bỏ đúng "cái nạng" nhưng không giúp cây quyết định "đi lại" được.
+
+**Kết luận tổng hợp mục 22** (cập nhật lại mục 19): Delta-Target Reformulation không phải một kỹ thuật cải thiện model theo nghĩa chung — nó **thay đổi độ khó bài toán và lộ ra 2 chế độ thất bại khác nhau** của 2 họ model. Với tree-based, bỏ Lag1 chỉ để lộ ra chúng không có tín hiệu thay thế → tệ hơn cả không làm gì. Với deep learning, cơ chế tối ưu hoá tự nhiên hội tụ về gần persistence (an toàn) rồi cộng thêm một chút tín hiệu thật, tăng dần theo horizon — nên nhìn tổng thể, **model có giá trị thực chứng minh được nhiều nhất là Seq2Seq-delta ở horizon dài (h=10/h=20)**, còn kết quả "ấn tượng" ở h=1/h=5 phần lớn phản ánh độ dễ tự nhiên của bài toán ngắn hạn hơn là năng lực học của model.
