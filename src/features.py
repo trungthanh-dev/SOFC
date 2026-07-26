@@ -93,23 +93,31 @@ def fill_missing_per_run(df, columns):
     return df
 
 
-def get_features(df):
-    return [col for col in df.columns if col not in (TARGET, "run_id")]
+def get_features(df, target=TARGET):
+    return [col for col in df.columns if col not in (target, "run_id")]
 
 
-def prepare_data(path=None):
+def prepare_data(path=None, target=TARGET, leakage_columns=None):
     """
     Full data-prep pipeline for the forecasting phase (on top of the
-    paper-faithful load_and_clean()): drop the W leakage column, drop the
+    paper-faithful load_and_clean()): drop leakage column(s), drop the
     3 degenerate runs, remap run_id to a contiguous 0..n-1 range, then add
     target-history (Lag/Rolling/Slope) features, run-aware.
+
+    target="V" (default, voltage forecasting): drops W (=V*I exactly, leaks
+    the target). target="W" (power forecasting): V and I are legitimate
+    historical features (not leakage -- W(t+h) for h>=1 is still strictly
+    future), so leakage_columns defaults to none unless overridden.
     """
+    if leakage_columns is None:
+        leakage_columns = LEAKAGE_COLUMNS if target == TARGET else []
+
     df = load_and_clean(path) if path else load_and_clean()
-    df = remove_leakage_features(df)
+    df = remove_leakage_features(df, leakage_columns)
     df = remove_degenerate_runs(df)
 
     history_cols_before = set(df.columns)
-    df = add_target_history_features(df)
+    df = add_target_history_features(df, target=target, prefix=target)
     history_cols = [c for c in df.columns if c not in history_cols_before]
     df = fill_missing_per_run(df, history_cols)
 

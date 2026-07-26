@@ -639,3 +639,172 @@ Hover có crosshair + tooltip đọc giá trị chính xác tại từng điểm
 Delta-target giảm **độ phân tán** sai số (std residual) ở mọi horizon cho LSTM, không chỉ giảm MAE trung bình — nhất quán với phát hiện shrinkage ở mục 22.3 (LSTM-delta dự đoán thận trọng, bám sát persistence, nên residual co cụm hơn quanh 0). Mức giảm % lớn dần ở horizon ngắn (giống pattern "delta thắng đậm ở h=1/h=5" đã thấy ở MAE trung bình, mục 19).
 
 **Việc còn để mở** (nếu người dùng muốn đào tiếp): chưa vẽ cho RF/XGBoost-delta (nơi mục 22 phát hiện residual thực chất tệ hơn cả persistence — sẽ thấy rõ trực quan là các đoạn "nhiễu vọt" chứ không co cụm như LSTM), và chưa vẽ cho Seq2Seq-delta ở h=20 (nơi có bằng chứng học thật rõ nhất).
+
+## 24. Đánh giá khả năng viết báo — tính mới, đóng góp, literature search
+
+Người dùng hỏi thẳng: cái này có viết báo được không, tính mới là gì, đóng góp gì, nổi bật hơn paper khác ở đâu. Trả lời dựa trên toàn bộ mục 1-23 + search literature thật (WebSearch/WebFetch, không phải suy đoán) — theo yêu cầu người dùng: **chỉ tin nguồn có DOI, tạp chí SCI/SCIE/Scopus thật, không tính preprint/blog**.
+
+### 24.1 Đánh giá tổng quan: viết báo được nhưng CHƯA "paper-ready"
+
+Có xương sống hợp lệ của 1 bài applied ML: reproduce baseline paper gốc (mục 1-9) → mở rộng bài toán (Phase 1/2, mục 11-16) → đánh giá có phê phán (mục 17-22) → phát hiện bất ngờ. Nhưng còn thiếu trước khi gửi đi:
+1. **Chỉ 1 test run duy nhất** (run 4) — không cross-validate qua nhiều run, không lặp seed cho NN → chưa chứng minh được kết quả ổn định. Gap nghiêm trọng nhất.
+2. Hyperparameter NN chưa tune riêng cho SOFC (đã tự ghi nhận mục 9/16).
+3. Chưa tái lập bảng nowcasting của paper gốc (Table 6) để có mạch "reproduce → extend" trọn vẹn (vẫn đang treo từ mục 10).
+4. Persistence-baseline decomposition (mục 22) hiện là "phụ lục chẩn đoán" — nếu viết báo nên đưa lên làm khung chính phần Results.
+
+### 24.2 Tính mới ban đầu đề xuất (trước khi search) — 3 điểm
+
+1. True forecasting (thay vì nowcasting như paper gốc) trên chính dataset `caapel/SOFC`.
+2. Phê phán Delta-Target Reformulation bằng persistence-baseline decomposition (shrinkage ratio + correlation) — chẩn đoán *tại sao* model thắng/thua, không chỉ thắng/thua.
+3. Pipeline run-aware cho dữ liệu thực nghiệm rời rạc (8 phiên đo, gap giờ-tháng).
+
+### 24.3 Kết quả literature search thật — phải ĐIỀU CHỈNH LẠI 2 trong 3 điểm trên
+
+**Search engine dùng**: WebSearch (Google-backed) + WebFetch trực tiếp vào ScienceDirect/MDPI (nhiều trang bị chặn 403 — Elsevier và MDPI block bot fetch, không đọc được full-text/abstract gốc qua tool này).
+
+**a) Điểm 1 (true forecasting trên SOFC) — SAI, đã có prior art xác nhận rõ:**
+
+> **Tofigh, Salehi, et al.**, "Transient modeling of a solid oxide fuel cell using an efficient deep learning HY-CNN-NARX paradigm", ***Journal of Power Sources*** (Elsevier, SCI/Scopus, tạp chí uy tín cao trong ngành fuel cell), vol. 606 (2024), article 234555. DOI: `10.1016/j.jpowsour.2024.234555`.
+
+Paper này dùng CNN + NARX (Nonlinear AutoRegressive eXogenous) — đưa lịch sử input/output qua conv 1D rồi dự đoán tương lai — **đúng là true forecasting thật**, trên dữ liệu SOFC thực nghiệm thật (tubular SOFC 650-750°C, ĐH Alberta + Cummins, khác hệ 1.5kW cogeneration của mình). Nhưng xác nhận qua search (lặp lại nhất quán ở 2 câu query độc lập): **chỉ one-step-ahead**, không multi-horizon.
+
+**→ Tính mới điều chỉnh lại**: không phải "true forecasting trên SOFC" (đã có, 2024, tạp chí mạnh hơn cả *Energies*) mà phải thu hẹp còn **multi-horizon forecasting** (h=1/5/10/20, không phải chỉ 1 bước) — đây vẫn chưa xác nhận có ai làm chưa, nhưng ít nhất khác biệt rõ với paper đã tìm thấy.
+
+**b) Điểm 2 (persistence-baseline decomposition) — không phải kỹ thuật mới, đang là xu hướng 2025:**
+
+> **Beck, N., Dovern, J., Vogl, S.**, "Mind the naive forecast! a rigorous evaluation of forecasting models for time series with low predictability", ***Applied Intelligence*** (Springer, SCI/Scopus), vol. 55, no. 6 (2025). DOI: `10.1007/s10489-025-06268-w`.
+
+Paper này (tổng quát, không phải SOFC) chứng minh: trên chuỗi khó dự đoán (tỷ giá, giá cổ phiếu), **không phương pháp nào (kể cả LSTM/TFT/XGBoost) thắng naive forecast nhất quán**, và **ML degrade mạnh hơn statistical model** khi biến động cao — đúng pattern RF/XGBoost-delta thua persistence ở mục 22. Nghĩa là "so với persistence baseline" là rigor **đang được cộng đồng forecasting 2025 nhấn mạnh trở lại**, không phải do project này nghĩ ra.
+
+**→ Định vị lại**: đóng góp không phải "phát minh diagnostic mới" mà là **áp dụng đúng rigor đó vào 1 kỹ thuật cụ thể (Delta-Target Reformulation) trên 1 domain cụ thể (SOFC) chưa thấy ai làm** — hẹp hơn nhưng vẫn hợp lệ. Phần **shrinkage-ratio + correlation decomposition** (giải thích RF/XGBoost và LSTM/TCN/Seq2Seq thất bại theo 2 cơ chế khác nhau khi dùng delta-target) là phần cụ thể nhất còn giữ được, vì "Mind the Naive Forecast" chỉ dừng ở "ai thắng/thua naive", không đào sâu *tại sao*.
+
+**c) Điểm 3 (run-aware pipeline)**: chưa tìm thấy phản chứng cụ thể — giữ nguyên, nhưng đây vốn là đóng góp kỹ thuật nhỏ (engineering rigor), không phải điểm mạnh chính để bán tính mới.
+
+### 24.4 Cảnh báo quan trọng — 1 phát hiện CHƯA XÁC MINH ĐƯỢC, cần người có quyền truy cập tạp chí tự đọc
+
+Khi search paper:
+
+> **Li, M., Wu, J., Chen, Z., et al.**, "Data-Driven Voltage Prognostic for Solid Oxide Fuel Cell System Based on Deep Learning", ***Energies*** 2022, 15(17), 6294. DOI: `10.3390/en15176294`.
+
+Search engine (2 lần query độc lập) mô tả dataset của paper này là **"32,843 records, 47 control parameters"** — **trùng khớp chính xác** với shape thô của `caapel/SOFC` (đã tự verify trực tiếp từ CSV ở mục 2, không qua search). Đây có thể là:
+- **(a)** Phát hiện lớn thật: paper 2022 (sớm hơn Beloev 2025 tận 3 năm) đã dùng chính dataset này để làm prognostic — prior art trực tiếp còn sớm hơn cả paper gốc mình tham chiếu.
+- **(b)** Nhiễu AI-tóm-tắt-search: con số có thể "rò" từ 1 câu search khác (về chính `caapel/SOFC`) sang câu trả lời này, không phải nội dung thật của paper Li et al.
+
+**KHÔNG xác minh được qua tool hiện có** — cả ScienceDirect lẫn MDPI đều trả 403 Forbidden khi WebFetch cố đọc trực tiếp (chặn bot). **Không được dùng thông tin này để viết bất kỳ câu nào trong bài** cho tới khi có người tự đọc trực tiếp bằng quyền truy cập thư viện/trường (VPN institutional access) xác nhận:
+1. `10.1016/j.jpowsour.2024.234555` — có thật chỉ one-step-ahead không, có so baseline persistence không.
+2. `10.3390/en15176294` — dataset họ dùng có phải chính `caapel/SOFC` không.
+
+### 24.5 Kết luận cập nhật
+
+Tính mới **vẫn có thật nhưng hẹp và khiêm tốn hơn** ban đầu:
+- Không phải "true forecasting trên SOFC" (đã có 2024) → còn lại: **multi-horizon** forecasting + **Delta-Target critique cụ thể** (shrinkage decomposition).
+- Không phải "phát minh diagnostic mới" → là **áp dụng rigor 2025 đang lên (naive-baseline comparison) vào 1 domain/kỹ thuật cụ thể chưa ai làm**, cộng thêm 1 lớp giải thích cơ chế (tree overfit nhiễu vs. DL shrinkage-về-persistence) mà paper tổng quát (Beck et al.) không có.
+- **Trước khi viết bất cứ gì**: phải đọc full-text 2 paper ở mục 24.4 (đặc biệt paper Li et al. 2022 — nếu đúng là cùng dataset thì phải định vị lại hoàn toàn câu chuyện "tính mới").
+
+## 25. Mở rộng sang dự đoán công suất (W) — bước đầu, RF/XGBoost local
+
+Người dùng đặt lại câu hỏi định hướng: muốn "AI chỉ là công cụ", trọng tâm là làm được gì đó có ý nghĩa cho SOFC (không chỉ là bài tập benchmark ML). 3 hướng đề xuất: (1) dự báo công suất/năng lượng phục vụ vận hành/CHP, (2) cảnh báo bất thường qua residual (bị chặn vì dataset không có nhãn lỗi), (3) đóng khung forecasting hiện tại như input cho predictive control (MPC). Người dùng chọn đi trước với hướng (1).
+
+### 25.1 Thay đổi kỹ thuật — tổng quát hoá `features.py` để target linh hoạt
+
+`W = V × I` đúng tuyệt đối về đại số (mục 11.2), nên khi đổi target sang `W`: **`V` và `I` được GIỮ LẠI làm feature** (không phải leakage — `V(t)`, `I(t)` là thông tin quá khứ hợp lệ để dự đoán `W(t+h)` với `h≥1`, khác hẳn lý do loại `W` khi dự đoán `V` là vì `W` ở CÙNG hàng với target).
+
+- `get_features(df, target=TARGET)` — thêm tham số `target` (trước đây hardcode `TARGET="V"`).
+- `prepare_data(path=None, target=TARGET, leakage_columns=None)` — thêm tham số `target`; nếu `target="V"` giữ hành vi cũ (loại `W`), nếu `target="W"` mặc định không loại cột nào (`leakage_columns=[]`), và `add_target_history_features` được gọi với `target=target, prefix=target` (sinh `W_Lag1`, `W_RollingMean5`... thay vì `V_...`).
+- File mới `src/main_power.py` — bản sao có điều chỉnh của `main.py` (RF/XGBoost local), đổi `TARGET="W"`, lưu vào `outputs/{models_saved,predictions_cache}/{random_forest,xgboost}_power/`, report vào `outputs/reports/{rf,xgb}_power_results.csv`.
+
+**Đã verify**: `prepare_data(target="W")` chạy đúng, shape `(13496, 36)` (nhiều hơn V-target 1 cột vì `V` giờ ở lại làm feature thay vì bị drop), cùng 5 run/split như V-forecasting (hợp lý vì `remove_degenerate_runs` không phụ thuộc target).
+
+### 25.2 Kết quả RF/XGBoost-Power (raw-target, local) — công suất khó dự đoán hơn điện áp RÕ RỆT
+
+| Horizon | Model | MAE (W) | RMSE (W) | R² |
+|---|---|---|---|---|
+| 1  | RF | 30.24 | 110.27 | 0.721 |
+| 1  | XGBoost | 36.73 | 135.99 | 0.576 |
+| 5  | RF | 54.16 | 154.25 | 0.455 |
+| 5  | XGBoost | 46.98 | 153.50 | 0.461 |
+| 10 | RF | 58.54 | 171.34 | 0.330 |
+| 10 | XGBoost | 51.48 | 180.04 | 0.260 |
+| 20 | RF | 81.68 | 193.78 | 0.146 |
+| 20 | XGBoost | 76.25 | 191.76 | 0.164 |
+
+(W dao động 0-1573W trong test set, std=208W — hệ vận hành 3 mode 500/1000/1500W theo paper.)
+
+**So sánh trực tiếp với V-forecasting (mục 14.2, R² 0.89-0.97)**: R² của Power-forecasting thấp hơn hẳn, và **giảm nhanh hơn nhiều theo horizon** (0.72→0.15 từ h=1→h=20, so với V chỉ giảm 0.97→0.89). Đây là bằng chứng số liệu rõ ràng: **công suất là bài toán khó hơn điện áp về bản chất** trên hệ này — hợp lý vì `I` (dòng điện, do tải/operator điều khiển) có thể đổi bậc thang đột ngột khi chuyển mode công suất, trong khi `V` là phản ứng điện hoá mượt hơn nhiều.
+
+### 25.3 Persistence baseline cho Power — càng khẳng định bài toán khó hơn
+
+| Horizon | MAE persistence (W) | R² persistence |
+|---|---|---|
+| 1  | 6.49 | 0.9114 |
+| 5  | 25.24 | 0.5779 |
+| 10 | 39.10 | 0.2689 |
+| 20 | 47.40 | **0.0075** |
+
+So với persistence-floor của V (mục 22.1, R² 0.87-0.99 xuyên suốt 4 horizon), persistence của W **sập rất nhanh** — ở h=20 (10 phút), biết giá trị hiện tại gần như **không giúp ích gì** để đoán 10 phút sau (R²≈0.008, gần bằng dự đoán = trung bình). Điều này khớp với giả thuyết ở 25.2: `W` đổi bậc thang theo quyết định vận hành (đổi mode công suất), không phải quá trình vật lý mượt như `V` — nên "cứ giữ nguyên giá trị cũ" chỉ đúng trong ngắn hạn.
+
+**So RF/XGBoost-Power với persistence (giống cách làm ở mục 22.2)**: cả 2 model đều **tệ hơn persistence ở mọi horizon** — RF: +366%(h1)/+115%(h5)/+50%(h10)/+72%(h20); XGBoost: +466%/+86%/+32%/+61% — **lặp lại đúng pattern đã thấy ở raw-target V-forecasting** (mục 22.2: mọi raw-target model đều thua persistence). Nhất quán với phát hiện persistence-bias là hiện tượng chung của raw-target trên cả 2 target, không riêng gì `V`.
+
+### 25.4 Ý nghĩa và bước tiếp theo
+
+- **Điểm tích cực cho "đóng góp cho SOFC"**: chính vì persistence của `W` sập nhanh ở horizon dài (R²→0 ở h=20) — đây là **đúng chỗ mà 1 model dự báo thật sự có giá trị**, khác với `V` (nơi persistence đã quá mạnh, mục 22.2 cho thấy khó có "chỗ" để model đóng góp thật). Nếu Delta-Target Reformulation lặp lại hiệu ứng đã thấy ở deep learning cho V (mục 22.3 — LSTM/TCN/Seq2Seq-delta thắng dần persistence theo horizon), thì Power mới là nơi hiệu ứng đó có ý nghĩa thực tế nhất (vì baseline ở đây tệ, dư địa cải thiện lớn).
+- **Chưa làm** (lúc viết mục 25.4): Delta-Target cho Power — xem kết quả ở mục 25.5 ngay dưới.
+- **Việc còn treo khác từ mục 24**: đọc full-text 2 paper (Tofigh/Salehi 2024, Li et al. 2022) trước khi viết bất kỳ câu tính-mới nào; đóng khung hướng (3) MPC-support vẫn còn là ý tưởng, chưa triển khai cụ thể.
+
+### 25.5 Delta-Target cho Power (RF/XGBoost, local) — lặp lại đúng pattern đã thấy ở V
+
+Script mới `src/main_power_delta.py` (bản sao có điều chỉnh của `main_delta.py`, target `W`). Kết quả:
+
+| Horizon | Model | MAE (W) | RMSE (W) | R² |
+|---|---|---|---|---|
+| 1  | RF-delta | 29.12 | 91.17 | 0.809 |
+| 1  | XGBoost-delta | 23.03 | 88.95 | 0.819 |
+| 5  | RF-delta | 50.16 | 164.07 | 0.384 |
+| 5  | XGBoost-delta | 53.02 | 183.35 | 0.230 |
+| 10 | RF-delta | 64.42 | 192.36 | 0.155 |
+| 10 | XGBoost-delta | 56.77 | 193.67 | 0.143 |
+| 20 | RF-delta | 81.86 | 209.08 | 0.006 |
+| 20 | XGBoost-delta | 82.46 | 209.38 | 0.003 |
+
+**So với raw-target Power (mục 25.2) — % thay đổi MAE:**
+
+| Horizon | RF (delta vs raw) | XGBoost (delta vs raw) |
+|---|---|---|
+| 1  | -3.7% | **-37.3%** |
+| 5  | -7.4% | +12.9% |
+| 10 | +10.0% | +10.3% |
+| 20 | +0.2% | +8.1% |
+
+**So với persistence-floor của Power (mục 25.3) — % thay đổi MAE:**
+
+| Horizon | RF-delta vs persistence | XGBoost-delta vs persistence |
+|---|---|---|
+| 1  | +349% | +255% |
+| 5  | +99% | +110% |
+| 10 | +65% | +45% |
+| 20 | +73% | +74% |
+
+**Nhận xét — tái lập gần như nguyên vẹn phát hiện ở mục 17.1/22.2 cho target hoàn toàn khác:**
+- Delta-target chỉ giúp rõ ở **h=1** (XGBoost -37%, RF -4%), mờ nhạt hoặc có hại từ **h≥5** — **giống hệt pattern RF/XGBoost-delta trên `V`** (mục 17.1), củng cố thêm rằng đây là hành vi đặc trưng của **họ model** (tree-based dưới delta-target), không phụ thuộc target là `V` hay `W`.
+- Quan trọng hơn: **RF/XGBoost-delta cho Power vẫn thua persistence ở MỌI horizon** (thua 45-349%), kể cả ở h=20 — nơi persistence-floor của Power đã rất yếu (R²≈0.008, mục 25.3). Tức là dù bài toán "có chỗ trống" cho model đóng góp thật (giả thuyết ở mục 25.4), **RF/XGBoost vẫn không tận dụng được** — lặp lại đúng cơ chế thất bại ở mục 22.3 (overfit nhiễu khi mất chỗ dựa Lag1, correlation thấp).
+- **Hàm ý**: giả thuyết "Power là nơi Delta-Target có giá trị thực tiễn nhất" (mục 25.4) **chưa được xác nhận bằng RF/XGBoost** — cần đúng phép thử đã dùng cho `V` ở mục 22.3 (LSTM/TCN/Seq2Seq-delta trên Colab), vì đó là nơi hiệu ứng "thắng dần persistence theo horizon" từng xuất hiện rõ nhất (đặc biệt Seq2Seq-delta). Đây là bước ưu tiên tiếp theo nếu muốn trả lời dứt điểm câu hỏi "dự báo công suất có ích thật không".
+
+Kết quả lưu tại `outputs/reports/{rf,xgb}_power_delta_results.csv`, model tại `outputs/models_saved/{random_forest,xgboost}_power_delta/`.
+
+### 25.6 Soạn 6 script Colab cho Power (LSTM/TCN/Seq2Seq × raw/delta) — chờ chạy
+
+Mirror đúng 6 script Voltage đã có (`main_lstm.py`, `main_tcn.py`, `main_seq2seq.py`, `main_lstm_delta.py`, `main_tcn_delta.py`, `main_seq2seq_delta.py`), chỉ đổi `TARGET="W"` và gọi `prepare_data(target="W")`/`get_features(df, target="W")` (nhờ đã tổng quát hoá `features.py` ở mục 25.1):
+
+- `main_lstm_power.py`, `main_tcn_power.py`, `main_seq2seq_power.py` — raw-target Power, lưu vào `outputs/{models_saved,predictions_cache}/{lstm,tcn,seq2seq}_power/`, report `outputs/reports/{lstm,tcn,seq2seq}_power_results.csv`.
+- `main_lstm_power_delta.py`, `main_tcn_power_delta.py`, `main_seq2seq_power_delta.py` — delta-target Power, tương tự với hậu tố `_power_delta`.
+
+Cả 6 file đã syntax-check qua `python -m py_compile` — pass.
+
+**Cập nhật `notebooks/SOFC_Colab_Forecasting.ipynb`** (32 cell, đã `nbformat.validate()` pass):
+- Đổi tên mục 7/7b thành "target Điện áp (V)" để phân biệt rõ với phần mới.
+- Thêm mục 7c (raw-target Power, 3 cell gọi `main_{lstm,tcn,seq2seq}_power.py`) và mục 7d (delta-target Power, 3 cell `_power_delta.py`) — có markdown giải thích bối cảnh (RF/XGBoost-Power đã thua persistence, đây là phép thử quyết định xem LSTM/TCN/Seq2Seq có làm tốt hơn không).
+- Mục 4 (check file cần thiết) bổ sung 6 file power vào danh sách `required`.
+- Mục 8 (so sánh) đổi tên thành "So sánh tất cả model — V và W, raw và delta", bảng gộp giờ đọc cả 12 file report (6 Voltage + 6 Power).
+- Mục 9 (ghi chú) bổ sung 1 dòng nhắc tải kết quả Power về local giống cách đã làm với Voltage (mục 20).
+
+**Trạng thái**: đã soạn xong, **chưa chạy trên Colab** — chờ người dùng mở notebook, `git pull` để lấy 6 file mới, rồi chạy lần lượt mục 7c/7d.
