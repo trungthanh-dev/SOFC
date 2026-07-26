@@ -952,3 +952,22 @@ Chạy xong qua cell gộp mục 7 (15 script, 9.2 phút, không lỗi). Kết q
 **Vấn đề phương pháp luận quan trọng**: so sánh RF/XGBoost ở mục 29 "sạch" vì `random_state` cố định — chỉ khác đúng 1 biến (`I(t+h)` có/không). Còn LSTM/TCN/Seq2Seq có dao động tự nhiên giữa các lần train (dù đã cố định seed, vẫn phụ thuộc GPU/thứ tự batch) — chính bản delta-target "không có I" chạy lại trong phiên này (TCN-delta h1=0.205077) cũng đã lệch khỏi số cũ ở mục 19 (0.208), dù cùng 1 script không đổi gì. Biên độ dao động tự nhiên này (~5-10%) **cùng cỡ** với biên độ thay đổi khi thêm `I(t+h)` (±0.8-15%) → với **n=1 lần chạy mỗi cấu hình**, không tách được tín hiệu thật của `I(t+h)` khỏi nhiễu ngẫu nhiên của quá trình train.
 
 **Kết luận**: thực nghiệm 3 trên deep learning **không kết luận được** với thiết kế hiện tại (thiếu lặp lại nhiều seed để trung bình hoá nhiễu). Khác với thực nghiệm RF/XGBoost (mục 29, kết luận rõ: giúp ở h=1, không giúp/hại ở horizon dài), bản LSTM/TCN/Seq2Seq này dừng lại ở mức "chưa xác nhận được", không phải "đã bác bỏ" — muốn có câu trả lời thật cần chạy lại mỗi cấu hình ≥3-5 lần với seed khác nhau rồi lấy trung bình + độ lệch chuẩn, nằm ngoài phạm vi đã đầu tư cho thực nghiệm này. Coi đây là điểm dừng hợp lý cho hướng thực nghiệm 3, không tiếp tục đào sâu thêm trừ khi có nhu cầu cụ thể.
+
+## 32. Bản nhiều seed cho thực nghiệm 3 — `main_given_i_multiseed.py`, soạn xong, chờ chạy Colab
+
+Người dùng hỏi "cần nhiều seed hơn là sao" → giải thích: seed cố định (`RANDOM_STATE=42`) lẽ ra làm train tất định, nhưng 1 số phép toán GPU (LSTM/cuDNN) không tất định tuyệt đối ngay cả khi cố định seed — nên chạy lại đúng 1 script y hệt cũng có thể ra số hơi khác. Cần chạy nhiều seed, lấy trung bình ± độ lệch chuẩn, mới tách được tín hiệu thật của `I(t+h)` khỏi nhiễu train.
+
+**Thay đổi code**: `TCNModel` đã có sẵn tham số `seed` (port từ FCF, chưa từng dùng tới trong project này — docstring ghi rõ mục đích chính là để "train cùng config dưới nhiều seed rồi lấy trung bình xoá nhiễu"). Thêm tương tự cho `LSTMModel` và `Seq2SeqLSTMModel` (`seed=None`, mặc định về `RANDOM_STATE` nếu không truyền) — thay tất cả `random.seed(RANDOM_STATE)`/`np.random.seed(RANDOM_STATE)`/`torch.manual_seed(RANDOM_STATE)` bằng `self.seed`.
+
+**Script mới `main_given_i_multiseed.py`**: lặp qua 3 kiến trúc × 2 biến thể (baseline/given_I) × **5 seed** (42-46) × 4 horizon = 120 lần train (LSTM/TCN: 1 model/horizon; Seq2Seq: 1 model cho cả 4 horizon/lần). Sau khi chạy xong:
+- Lưu toàn bộ kết quả thô (`given_i_multiseed_raw.csv`, 120 dòng).
+- Tính `mean`/`std` MAE theo nhóm (kiến trúc, biến thể, horizon) → `given_i_multiseed_summary.csv`.
+- Tự động kết luận từng (kiến trúc, horizon): so `gap = mean(baseline) - mean(given_I)` với `combined_std = std(baseline) + std(given_I)` — nếu `|gap| > combined_std` thì kết luận "thật" (tốt hơn/tệ hơn), ngược lại "không phân biệt được (trong nhiễu)" → `given_i_multiseed_verdict.csv`.
+
+**Đã verify**:
+- `python -m py_compile` cho script mới + 3 file model đã sửa — pass.
+- Smoke-test cục bộ (LSTM, 2 seed, 2 epoch): seed=42 và seed=43 cho MAE khác nhau rõ ràng dù cùng 1 cấu hình (`use_i=False`: 0.213 vs 0.206 ở h=1) — **minh chứng trực tiếp** cho lý do cần nhiều seed, đúng như giải thích với người dùng.
+
+**Cập nhật notebook** (40 cell, validate + compile-check pass): thêm mục 7.6 (markdown giải thích + 1 cell chạy `main_given_i_multiseed.py`, ước ~15-25 phút) đặt sau 7.5 (Power delta), trước mục 8 (so sánh) — **không** đưa vào `ALL_SCRIPTS` của cell gộp mục 7 (chủ ý để riêng, vì tốn thêm 15-25 phút và output không theo format `*_results.csv` chuẩn mà mục 8 đọc). Bổ sung file vào check mục 4.
+
+**Trạng thái**: đã soạn + test xong, **chưa chạy trên Colab** — chờ người dùng `git pull` rồi chạy mục 7.6.

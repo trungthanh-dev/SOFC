@@ -44,7 +44,7 @@ class LSTMModel:
     def __init__(
             self, hidden_size=128, num_layers=2, dropout=0.1, learning_rate=5e-4,
             epochs=150, batch_size=128, val_ratio=0.1, patience=10, loss_delta=1.0,
-            adam_eps=1e-4, device=None,
+            adam_eps=1e-4, device=None, seed=None,
     ):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -64,12 +64,13 @@ class LSTMModel:
         self.patience = patience
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        random.seed(RANDOM_STATE)
-        np.random.seed(RANDOM_STATE)
-        torch.manual_seed(RANDOM_STATE)
+        self.seed = seed if seed is not None else RANDOM_STATE
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
         if torch.cuda.is_available():
-            torch.cuda.manual_seed(RANDOM_STATE)
-            torch.cuda.manual_seed_all(RANDOM_STATE)
+            torch.cuda.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
 
         self.model = None
         self.scaler = StandardScaler()

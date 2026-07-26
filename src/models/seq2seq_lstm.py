@@ -83,7 +83,7 @@ class Seq2SeqLSTMModel:
             self, horizons, hidden_size=128, num_layers=2, dropout=0.1, learning_rate=5e-4,
             epochs=150, batch_size=128, val_ratio=0.1, patience=10, loss_delta=1.0,
             weight_decay=1e-5, horizon_aware_decoder=False, teacher_forcing_start=0.0,
-            teacher_forcing_decay_epochs=None, adam_eps=1e-4, device=None,
+            teacher_forcing_decay_epochs=None, adam_eps=1e-4, device=None, seed=None,
     ):
         self.horizons = list(horizons)
         self.n_horizons = len(self.horizons)
@@ -103,12 +103,13 @@ class Seq2SeqLSTMModel:
         self.adam_eps = adam_eps
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        random.seed(RANDOM_STATE)
-        np.random.seed(RANDOM_STATE)
-        torch.manual_seed(RANDOM_STATE)
+        self.seed = seed if seed is not None else RANDOM_STATE
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
         if torch.cuda.is_available():
-            torch.cuda.manual_seed(RANDOM_STATE)
-            torch.cuda.manual_seed_all(RANDOM_STATE)
+            torch.cuda.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
 
         self.model = None
         self.scaler = StandardScaler()
