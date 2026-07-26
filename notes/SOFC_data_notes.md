@@ -1049,3 +1049,29 @@ Người dùng đồng ý hướng đi tiếp theo (mục 24.1, gap #1): kết l
 **Cập nhật notebook** (42 cell, validate + compile-check pass): thêm mục 7.7 sau 7.6, trước mục 8 — ước ~10-15 phút. Bổ sung file vào check mục 4.
 
 **Trạng thái**: đã soạn + test xong, **chưa chạy trên Colab** — chờ người dùng `git pull` rồi chạy mục 7.7. Đây là bước cuối cùng để đóng lại gap #1 trong checklist "paper-ready" (mục 24.1).
+
+## 35. Kết quả multi-seed cho kết luận CHÍNH (mục 34 chạy xong) — QUAN TRỌNG: claim "Seq2Seq-delta thắng đậm ở h=20" (mục 19) KHÔNG đứng vững, phải sửa lại
+
+Chạy xong trên Colab, 7.4 phút, 15/15 lần train không lỗi.
+
+**Mean ± std MAE (5 seed) vs persistence (số cố định, mục 22.1/25.3):**
+
+| Model | h=1 | h=5 | h=10 | h=20 |
+|---|---|---|---|---|
+| LSTM-delta | 0.199±0.008 vs 0.201 (-1.3%, hòa) | 0.728±0.026 vs 0.703 (+3.6%, hòa) | 1.093±0.027 vs 1.143 (**-4.4%, THẮNG thật**) | 1.553±0.036 vs 1.690 (**-8.1%, THẮNG thật**) |
+| TCN-delta | 0.203±0.002 vs 0.201 (**+1.0%, THUA thật** — std cực nhỏ nên chênh lệch nhỏ vẫn "có ý nghĩa", nhưng độ lớn thực tế không đáng kể) | 0.675±0.018 vs 0.703 (**-3.9%, THẮNG thật**) | 1.110±0.048 vs 1.143 (-2.9%, hòa) | 1.598±0.046 vs 1.690 (**-5.5%, THẮNG thật**) |
+| Seq2Seq-delta | 0.271±0.042 vs 0.201 (**+34.6%, THUA thật, đậm**) | 0.750±0.027 vs 0.703 (**+6.8%, THUA thật**) | 1.205±0.074 vs 1.143 (+5.4%, hòa) | 1.654±0.141 vs 1.690 (-2.1%, hòa — std=0.141 quá lớn, không có ý nghĩa) |
+
+**Phát hiện gây đảo ngược kết luận**: mục 19 báo cáo Seq2Seq-delta thắng persistence -15.3% ở h=20, coi đây là "bằng chứng học thật rõ nhất" trong cả 10 biến thể model. Qua 5 seed, **kết quả đó không lặp lại được** — trung bình 5 seed ở h=20 chỉ còn -2.1% (nằm hoàn toàn trong nhiễu, std=0.141 lớn hơn cả mức chênh lệch), và tệ hơn: ở h=1/h=5, Seq2Seq-delta bị xác nhận **thua thật, thua đậm** persistence (+34.6% ở h=1!). Seed=42 (mặc định `RANDOM_STATE`) của lần chạy này cho h20=1.488 — khác cả với chính con số mục 19 (1.4309) dù "cùng seed" — xác nhận lại lần nữa non-determinism GPU đã nêu ở mục 31: fix seed không đảm bảo tái lập chính xác trên GPU.
+
+**→ Con số -15.3% ở mục 19 chỉ là 1 lần chạy may mắn (lucky run), KHÔNG đại diện cho hành vi thật của Seq2Seq-delta.**
+
+**Model đáng tin cậy nhất qua kiểm định lại: LSTM-delta** — là model DUY NHẤT có kết quả nhất quán đúng hướng "delta giúp nhiều hơn ở horizon dài", thắng thật ở cả h=10 và h=20, không có horizon nào thua thật. TCN-delta đứng thứ 2 (thắng thật 2/4 horizon, thua thật 1/4 nhưng biên độ rất nhỏ).
+
+**Kết luận sửa lại (thay thế 1 phần kết luận mục 19/22.3/28)**:
+- Delta-Target Reformulation **vẫn giúp thật cho model tuần tự ở horizon dài** (h≥10) — kết luận cốt lõi này **đứng vững**, chỉ đổi model đại diện tốt nhất.
+- **Đổi model "flagship" từ Seq2Seq-delta sang LSTM-delta** cho horizon dài — đây mới là model nên dùng làm ví dụ chính nếu viết báo.
+- Seq2Seq-delta ở horizon ngắn (h=1, h=5) **thực chất tệ hơn cả không làm gì**, không phải chỉ "kém nổi bật" như tưởng trước đây.
+- **Bài học phương pháp luận quan trọng nhất**: đây là ví dụ trực tiếp, cụ thể tại sao **không được rút kết luận từ 1 lần chạy** đối với model có yếu tố ngẫu nhiên (LSTM/TCN/Seq2Seq) — nếu chỉ dựa vào mục 19 gốc, cả project đã đi sai hướng khi chọn Seq2Seq-delta làm "kết quả tốt nhất". Đây là minh chứng mạnh cho rigor multi-seed, đáng đưa thẳng vào phần Discussion/Limitations nếu viết báo — thể hiện tính khoa học nghiêm túc, không phải điểm yếu.
+
+Kết quả đầy đủ lưu tại `outputs/reports/delta_vs_persistence_multiseed_{raw,summary,verdict}.csv`.
