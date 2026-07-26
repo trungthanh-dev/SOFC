@@ -820,3 +820,102 @@ Người dùng paste bảng kết quả tưởng là Power nhưng thực ra là 
 **Bug phát hiện khi tự kiểm tra (không phải người dùng báo)**: cell code mới ban đầu bị lỗi cú pháp — 1 số ký tự escape `\n` bên trong f-string một dòng bị hỏng thành newline thật trong lúc soạn (transport qua nhiều lớp JSON/heredoc làm mất 1 lớp escape), gây `SyntaxError: unterminated f-string literal`. Phát hiện bằng cách tự `compile()` từng cell code trước khi giao — đã sửa bằng cách tách `SEP = "="*80` ra biến riêng, không nhúng `\n` vào f-string 1 dòng nữa. Đã verify lại toàn bộ 34 cell qua `compile()` (chỉ cell 6 — `%cd`/`!git` lồng trong `if/else` — bị flag, nhưng đó là cú pháp IPython magic hợp lệ trong Colab, không phải lỗi thật, đã dùng từ trước).
 
 **Bài học cho lần sau**: khi soạn code cell cho notebook (đặc biệt qua nbformat + heredoc/exec nhiều lớp), **luôn `compile()` từng cell code trước khi ghi file**, không chỉ `nbformat.validate()` (validate chỉ kiểm tra cấu trúc JSON của notebook, không kiểm tra cú pháp Python bên trong cell).
+
+## 26. Kết quả đầy đủ LSTM/TCN/Seq2Seq-Power (Colab) — Power gần như KHÔNG dự báo được tốt hơn persistence
+
+Chạy xong cả 12 script qua cell gộp mới (mục 25.7). Kết quả Power (raw + delta, 3 kiến trúc, 4 horizon):
+
+| Horizon | Model | MAE (W) | R² |
+|---|---|---|---|
+| 1  | LSTM-power | 18.93 | 0.834 |
+| 1  | TCN-power | 13.08 | 0.894 |
+| 1  | Seq2Seq-power | 36.01 | 0.509 |
+| 1  | LSTM-power-delta | 6.89 | 0.912 |
+| 1  | TCN-power-delta | 7.22 | 0.912 |
+| 1  | Seq2Seq-power-delta | 7.05 | 0.912 |
+| 5  | LSTM-power | 38.96 | 0.368 |
+| 5  | TCN-power | 37.55 | 0.469 |
+| 5  | Seq2Seq-power | 39.88 | 0.398 |
+| 5  | LSTM-power-delta | 26.68 | 0.580 |
+| 5  | TCN-power-delta | 26.13 | 0.582 |
+| 5  | Seq2Seq-power-delta | 25.80 | 0.580 |
+| 10 | LSTM-power | 45.05 | 0.162 |
+| 10 | TCN-power | 43.49 | 0.202 |
+| 10 | Seq2Seq-power | 42.28 | 0.289 |
+| 10 | LSTM-power-delta | 40.72 | 0.277 |
+| 10 | TCN-power-delta | 40.36 | 0.284 |
+| 10 | Seq2Seq-power-delta | 39.53 | 0.272 |
+| 20 | LSTM-power | 47.64 | 0.046 |
+| 20 | TCN-power | 47.30 | 0.208 |
+| 20 | **Seq2Seq-power** | **44.56** | **0.189** |
+| 20 | LSTM-power-delta | 48.13 | 0.021 |
+| 20 | TCN-power-delta | 48.80 | 0.039 |
+| 20 | Seq2Seq-power-delta | 47.55 | 0.011 |
+
+**So với persistence-floor của Power (mục 25.3: MAE 6.49/25.24/39.10/47.40) — % thay đổi MAE:**
+
+| Horizon | LSTM-power | TCN-power | Seq2Seq-power | LSTM-power-delta | TCN-power-delta | Seq2Seq-power-delta |
+|---|---|---|---|---|---|---|
+| 1  | +192% | +102% | +455% | +6.1% | +11.2% | +8.7% |
+| 5  | +54% | +49% | +58% | +5.7% | +3.5% | +2.2% |
+| 10 | +15% | +11% | +8% | +4.1% | +3.2% | +1.1% |
+| 20 | +0.5% | -0.2% | **-6.0%** | +1.5% | +2.9% | +0.3% |
+
+**Nhận xét — khác hẳn câu chuyện Voltage (mục 19/22):**
+- **Không có biến thể Power nào thắng persistence rõ rệt**, ngoại trừ đúng 1 trường hợp: **`Seq2Seq-power` (raw-target, KHÔNG phải delta) ở h=20, thắng thật -6.0%** — model Power duy nhất trong cả 12 biến thể vượt qua "không làm gì".
+- Delta-target với Power chỉ có tác dụng **kéo raw-target về gần persistence ở h ngắn** (LSTM raw→delta ở h=1: 18.93→6.89, giảm 64%; Seq2Seq raw→delta ở h=1: 36.01→7.05, giảm 80%) — nhưng đó là kéo về **bằng** persistence, không phải **vượt qua** nó (LSTM/TCN/Seq2Seq-power-delta vẫn tệ hơn persistence 1-11% ở mọi horizon). Khác hẳn Voltage-delta, nơi DL-delta thật sự thắng persistence và biên độ thắng tăng dần theo horizon.
+- Ở horizon dài (h=20), delta-target với Power thậm chí **không còn ý nghĩa** (LSTM/TCN/Seq2Seq-power-delta đều xấp xỉ hoặc tệ hơn bản raw cùng kiến trúc) — ngược với Voltage nơi delta luôn thắng raw ở mọi horizon kể cả h=20.
+
+**Giải thích vật lý (không phải model yếu)**: `V` là phản ứng điện hoá mượt (autocorrelation cao, dễ khai thác từ lịch sử). `W = V×I`, mà `I` do operator/tải điều khiển — có thể **nhảy bậc thang đột ngột** khi hệ chuyển mode công suất (500/1000/1500W, theo mô tả paper gốc). Nhảy bậc thang kiểu quyết định vận hành **không có cấu trúc thời gian nào để học từ lịch sử cảm biến thuần tuý** — muốn dự báo đúng cần biết trước lịch trình setpoint (thông tin ngoài, không có trong dataset này).
+
+**Kết luận cho hướng "làm gì đó cho SOFC" (mục 24, người dùng đặt ra)**: dự báo Power thuần từ lịch sử cảm biến **gần như không khả thi hơn baseline trivial** với dữ liệu hiện có — đây là 1 giới hạn cấu trúc quan trọng cần nêu rõ nếu viết báo, không phải thất bại của pipeline. Hướng đi thực tế hơn nếu muốn dự báo Power hữu ích: kết hợp thêm tín hiệu lịch trình vận hành (setpoint đã lên kế hoạch) làm feature, thay vì chỉ dùng lịch sử cảm biến — nằm ngoài phạm vi dataset hiện tại.
+
+## 27. Dự đoán `V` tốt có giúp dự đoán `W` không? — Thực nghiệm oracle-decomposition, trả lời dứt điểm: KHÔNG
+
+Người dùng hỏi thẳng: nếu `V` dự đoán được (đã chứng minh, mục 19/22), liệu có tận dụng được để đoán `W` không (vì `W=V×I`)? Kiểm tra bằng thực nghiệm "oracle substitution" trên test set thật (run 4): thay `V(t+h)` hoặc `I(t+h)` bằng giá trị THẬT (oracle, giả định biết trước hoàn hảo), giữ nguyên bên còn lại ở mức persistence, rồi tái tạo `Ŵ = V̂ × Î` và so với persistence-floor của `W`.
+
+| Horizon | Persistence W | Oracle-V + Persistence-I | Persistence-V + Oracle-I | Oracle cả 2 (sanity check) |
+|---|---|---|---|---|
+| 1  | 6.49 | 8.08 (**+24%, tệ hơn**) | **1.11 (-83%)** | 0.0000 |
+| 5  | 25.24 | 31.01 (**+23%, tệ hơn**) | **3.78 (-85%)** | 0.0000 |
+| 10 | 39.10 | 46.26 (**+18%, tệ hơn**) | **6.22 (-84%)** | 0.0000 |
+| 20 | 47.40 | 53.21 (**+12%, tệ hơn**) | **8.25 (-83%)** | 0.0000 |
+
+(Cột "oracle cả 2" ≈ 0 xác nhận công thức tái tạo đúng — sanity check pass.)
+
+**Kết luận dứt điểm**: biết trước `V(t+h)` hoàn hảo mà vẫn dùng `I` cũ → dự đoán `W` **còn tệ hơn cả không làm gì** (persistence). Ngược lại, chỉ cần biết trước `I(t+h)` hoàn hảo (dù `V` vẫn persistence) → sai số giảm **83-85%** ở mọi horizon. Nghĩa là gần như toàn bộ độ khó của bài toán `W` nằm ở việc không biết trước `I`, không phải `V` — `V` chỉ đóng góp biến động nhỏ, gần như nhiễu nền so với `I`. **Dự đoán `V` tốt (kể cả Seq2Seq-delta ở mục 19/22) không mở ra con đường nào để cải thiện dự đoán `W`** — 2 bài toán độc lập gần như hoàn toàn về độ khó, đúng như giả thuyết vật lý ở mục 26 (nhưng giờ có bằng chứng số liệu trực tiếp, không chỉ suy luận định tính).
+
+**Kỹ thuật này (oracle-substitution decomposition) có thể khái quát hoá**: với bất kỳ target nào phân rã được thành tích/tổng của các thành phần đo được (ở đây `W=V×I`), thay từng thành phần bằng giá trị thật để cô lập xem thành phần nào là "nút thắt cổ chai" thực sự của độ khó dự đoán — một công cụ chẩn đoán nhỏ, gọn, có thể dùng lại cho các bài toán tương tự khác.
+
+## 28. Vậy giờ làm gì tiếp?
+
+Với toàn bộ bằng chứng đã có (mục 1-27), hướng đi hợp lý nhất:
+
+1. **Đóng lại nhánh Power-forecasting-thuần-từ-lịch-sử** — đã có câu trả lời dứt điểm (mục 26-27), không cần tune thêm hyperparameter hay thử model khác cho `W`, vì nút thắt là thiếu thông tin (`I` tương lai), không phải model yếu.
+2. **Dồn lại vào câu chuyện chính: `V`-forecasting + vai trò làm input cho MPC/giám sát** (hướng 3, mục 24/28-cập-nhật) — đây là hướng duy nhất đã chứng minh có "học thật" (Seq2Seq-delta thắng persistence tăng dần theo horizon, mục 19/22).
+3. **Thực nghiệm mới đáng làm nếu muốn hoàn thiện câu chuyện MPC**: dựng lại bài toán kiểu NARX — **giả định `I(t+h)` là input đã biết trước** (đúng như 1 bộ điều khiển thật sẽ biết trước setpoint dòng điện mình sắp đặt ra), rồi dự đoán `V(t+h)` với `I(t+h)` là exogenous feature (không phải phải đoán mù). Đây chính là kịch bản `Persistence-V + Oracle-I` ở mục 27 nhưng đảo vai trò — kiểm tra xem biết trước `I` tương lai có giúp dự đoán `V` tốt hơn nữa không (nhiều khả năng có, vì `V` là phản ứng của `I`). Nếu đúng, đây là bằng chứng mạnh nhất cho việc đóng khung "dự đoán V có điều kiện theo lệnh vận hành đã biết" — đúng thiết kế NARX của paper Tofigh/Salehi (mục 24).
+4. **Việc còn treo từ mục 24**: đọc full-text 2 paper (Tofigh/Salehi 2024, Li et al. 2022) trước khi viết bất kỳ câu tính-mới nào — vẫn chưa làm.
+
+**Trạng thái commit**: người dùng yêu cầu chưa commit khi thảo luận mục 26-27 (đang phân tích thêm trước khi chốt) — cần hỏi lại trước khi push.
+
+## 29. Thực nghiệm 3 — biết trước `I(t+h)` có giúp dự đoán `V` không? (RF/XGBoost, local)
+
+Script mới `src/main_v_given_i.py`: nhét thêm `I(t+h)` (lấy qua `create_sliding_window()` áp lên chính cột `I`, tận dụng lại đúng logic windowing có sẵn — không cần hàm mới) làm 1 feature phụ vào vector phẳng (581 chiều thay vì 580) cho RF/XGBoost, train cả raw-target lẫn delta-target `V`, so với baseline không có `I(t+h)` (mục 14.2/17.1). Đã smoke-test 1 trường hợp (XGBoost raw h=1) khớp chính xác số cũ trước khi chạy full 32 tổ hợp (~40 phút, RF chiếm phần lớn thời gian do 8 tổ hợp RF × trung bình ~460s/lần do có thêm chiều feature).
+
+**Kết quả — % thay đổi MAE khi có `I(t+h)` so với không có:**
+
+| Model | h=1 | h=5 | h=10 | h=20 |
+|---|---|---|---|---|
+| RF-raw | -16.8% | -0.5% | -3.5% | -2.0% |
+| RF-delta | -10.5% | +24.5% | +8.1% | +2.0% |
+| XGBoost-raw | -8.4% | -0.6% | +14.8% | +4.7% |
+| XGBoost-delta | **-24.3%** | **-19.4%** | +5.0% | +21.3% |
+
+**Nhận xét:**
+- **Chỉ giúp thật ở h=1** (cả 4/4 tổ hợp cải thiện, tới -24% với XGBoost-delta) — hợp lý vì phản ứng điện hoá gần tức thời, `I(t+1)` gần như quyết định trực tiếp `V(t+1)`.
+- **Từ h≥10, hầu hết tổ hợp TỆ HƠN** khi thêm `I(t+h)` — khác với oracle-decomposition ở mục 27 (biết trước `I` giúp tái tạo `W` tốt hơn 83-85% ở **mọi** horizon, vì đó dùng đúng công thức đại số `W=V×I` — ràng buộc cứng). Ở đây chỉ nhét `I(t+h)` như 1 trong 581 feature phẳng cho RF/XGBoost — model phải tự học quan hệ, và ở horizon xa, động lực trung gian quá phức tạp để 1 giá trị đơn lẻ nắm bắt được → dễ overfit/nhiễu thay vì giúp ích.
+- **So với mục 19**: dù được "biết trước đáp án" (`I` tương lai), XGBoost-delta-given-I ở h=1 (MAE 0.617V) vẫn **tệ hơn** LSTM-delta thuần tuý không biết trước gì (0.205V) — deep learning học "trong bóng tối" vẫn giỏi hơn cây quyết định dù cây được ưu ái thông tin thêm.
+
+Kết quả lưu tại `outputs/reports/v_given_i_results.csv`.
+
+**Kết luận thực nghiệm 3**: giả thuyết "biết trước I giúp dự đoán V" — **đúng nhưng chỉ ở horizon ngắn (h=1, có thể tới h=5 với XGBoost-delta)**, và cách nhét thẳng feature phẳng cho RF/XGBoost là quá thô để khai thác hết tiềm năng. Muốn làm đúng kiểu NARX (paper Tofigh/Salehi, mục 24 — cho exogenous input 1 kênh riêng thay vì trộn vào window) cần thử trên kiến trúc sequence (LSTM/TCN/Seq2Seq, Colab) — **chưa làm**, là bước hợp lý tiếp theo nếu muốn đẩy hướng MPC-support xa hơn.
