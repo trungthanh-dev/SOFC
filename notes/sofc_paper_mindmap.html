@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ranh giới dự đoán được của hệ SOFC — Sơ đồ outline bài báo</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f4f6f5;
+    --surface:     #ffffff;
+    --surface-2:   #eef1ef;
+    --ink:         #16201d;
+    --ink-soft:    #4b5651;
+    --ink-mute:    #7c8883;
+    --line:        #d8ddda;
+    --trunk:       #b9c2bd;
+    --accent:      #c1701f;
+    --accent-soft: #c1701f1a;
+
+    --b1: #2c5c86; /* dong luc - xanh dien */
+    --b2: #a6552c; /* du lieu - dat nung/gom */
+    --b3: #2c7a6e; /* phuong phap - thep/dung cu */
+    --b4: #b8862a; /* ket qua - vang nang luong */
+    --b5: #6a4a78; /* literature - muc hoc thuat */
+    --b6: #3c7a49; /* y nghia - tang truong */
+    --b7: #8a4438; /* gioi han - canh bao tram */
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:        #12100e;
+      --surface:     #1b1917;
+      --surface-2:   #221f1c;
+      --ink:         #f1ede7;
+      --ink-soft:    #c7beb3;
+      --ink-mute:    #8f867b;
+      --line:        #34302b;
+      --trunk:       #46403a;
+      --accent:      #e08a3e;
+      --accent-soft: #e08a3e26;
+
+      --b1: #5a92c4;
+      --b2: #d38657;
+      --b3: #4fab9c;
+      --b4: #e0b249;
+      --b5: #a583b5;
+      --b6: #6bb277;
+      --b7: #c97367;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:        #12100e;
+    --surface:     #1b1917;
+    --surface-2:   #221f1c;
+    --ink:         #f1ede7;
+    --ink-soft:    #c7beb3;
+    --ink-mute:    #8f867b;
+    --line:        #34302b;
+    --trunk:       #46403a;
+    --accent:      #e08a3e;
+    --accent-soft: #e08a3e26;
+
+    --b1: #5a92c4; --b2: #d38657; --b3: #4fab9c; --b4: #e0b249;
+    --b5: #a583b5; --b6: #6bb277; --b7: #c97367;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  html { text-size-adjust: 100%; }
+
+  .root-scope {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 40px 20px 70px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  /* ---------- Hero / root ---------- */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 30px 34px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 4px;
+    background: var(--accent);
+  }
+  .hero .eyebrow {
+    font-size: 11.5px;
+    font-weight: 650;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  .hero h1 {
+    font-size: clamp(22px, 3vw, 30px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 12px;
+    text-wrap: balance;
+    max-width: 30ch;
+  }
+  .hero p.lede {
+    font-size: 15px;
+    color: var(--ink-soft);
+    max-width: 68ch;
+    margin: 0 0 20px;
+  }
+  .qrow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px;
+  }
+  .qcard {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .qcard .qtag {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: var(--ink-mute);
+  }
+  .qcard p {
+    margin: 4px 0 0;
+    font-size: 13.5px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* ---------- Trunk connector ---------- */
+  .trunk {
+    display: flex;
+    justify-content: center;
+    margin: 0;
+  }
+  .trunk-line {
+    width: 2px;
+    height: 34px;
+    background: var(--trunk);
+  }
+
+  /* ---------- Branch grid ---------- */
+  .branches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 18px 16px;
+    position: relative;
+    padding-top: 18px;
+  }
+  .branches::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 6%;
+    right: 6%;
+    height: 2px;
+    background: var(--trunk);
+  }
+  .branch {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 18px 16px;
+    position: relative;
+  }
+  .branch::before {
+    /* stem tick up to the horizontal trunk bar */
+    content: "";
+    position: absolute;
+    top: -18px;
+    left: 24px;
+    width: 2px;
+    height: 18px;
+    background: var(--stem, var(--trunk));
+  }
+  .branch .btag {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+  .branch .btag .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--stem, var(--accent));
+    flex: none;
+  }
+  .branch h2 {
+    font-size: 16.5px;
+    font-weight: 680;
+    margin: 0 0 8px;
+    color: var(--stem, var(--ink));
+    text-wrap: balance;
+  }
+  .branch .summary {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    margin: 0 0 10px;
+  }
+  .branch ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .branch li {
+    margin-bottom: 7px;
+  }
+  .branch li:last-child { margin-bottom: 0; }
+  .branch li b { font-weight: 650; }
+  .branch code {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* nested sub-branches inside §4 */
+  .subbranch {
+    border: 1px dashed var(--line);
+    border-radius: 9px;
+    padding: 10px 12px;
+    margin-top: 10px;
+  }
+  .subbranch:first-of-type { margin-top: 12px; }
+  .subbranch .stag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--stem);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .subbranch p {
+    margin: 0;
+    font-size: 12.8px;
+    color: var(--ink-soft);
+  }
+
+  /* toggle */
+  .toggle {
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--ink-mute);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 6px 0 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .toggle:hover { color: var(--stem, var(--ink)); }
+  .toggle .chev { transition: transform 0.15s ease; }
+  .branch.open .toggle .chev { transform: rotate(90deg); }
+  .detail { display: none; margin-top: 10px; }
+  .branch.open .detail { display: block; }
+
+  footer.note {
+    max-width: 1180px;
+    margin: 30px auto 0;
+    font-size: 12px;
+    color: var(--ink-mute);
+    line-height: 1.6;
+  }
+  footer.note code { font-family: ui-monospace, Consolas, monospace; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .toggle .chev { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="root-scope">
+  <div class="wrap">
+
+    <header class="hero">
+      <p class="eyebrow">Outline bài báo — SOFC Forecastability Study</p>
+      <h1>Ranh giới dự đoán được của hệ SOFC</h1>
+      <p class="lede">AI là công cụ, SOFC là trọng tâm. Câu hỏi kỹ thuật xuyên suốt: với dữ liệu cảm biến lịch sử của 1 hệ SOFC cogeneration thật, <b>cái gì dự đoán trước được để hỗ trợ vận hành/giám sát, cái gì không, và vì sao</b> — không phải "model nào có MAE thấp nhất".</p>
+      <div class="qrow">
+        <div class="qcard"><span class="qtag">Câu hỏi con (a)</span><p>Điện áp (V) có dự đoán trước được không?</p></div>
+        <div class="qcard"><span class="qtag">Câu hỏi con (b)</span><p>Công suất (W) có dự đoán trước được không?</p></div>
+        <div class="qcard"><span class="qtag">Câu hỏi con (c)</span><p>Biết trước lệnh vận hành có giúp gì không?</p></div>
+      </div>
+    </header>
+
+    <div class="trunk"><div class="trunk-line"></div></div>
+
+    <section class="branches" id="branches"></section>
+
+    <footer class="note">
+      Nguồn: tổng hợp từ <code>notes/SOFC_data_notes.md</code> (35 mục, dự án <code>E:\sofc</code>). Bấm vào tiêu đề mỗi nhánh để xem chi tiết. Sơ đồ này là bản phác thảo outline, chưa phải bản thảo bài báo.
+    </footer>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var DATA = [
+    {
+      tag: "b1", num: "§1",
+      title: "Động lực & Câu hỏi nghiên cứu",
+      summary: "Vì sao hệ SOFC cần nhìn xa hơn nowcasting, và câu hỏi trung tâm của bài.",
+      bullets: [
+        "Hệ SOFC cogeneration thật cần giám sát/vận hành <b>chủ động</b>, không chỉ nowcasting tức thời — paper gốc (Beloev et al. 2025) chỉ dự đoán <code>V(t)</code> từ input <i>cùng thời điểm t</i>.",
+        "Câu hỏi trung tâm: với dữ liệu cảm biến lịch sử, <b>cái gì dự đoán trước được</b> để hỗ trợ vận hành, cái gì không, và vì sao?",
+        "3 câu hỏi con dẫn dắt toàn bài: điện áp dự đoán được? công suất dự đoán được? biết trước lệnh vận hành có giúp gì?"
+      ]
+    },
+    {
+      tag: "b2", num: "§2",
+      title: "Dữ liệu & Hệ thống",
+      summary: "SOFC cogeneration 1.5kW thật, dataset công khai, thách thức run-aware.",
+      bullets: [
+        "SOFC cogeneration <b>1.5kW</b> thật, 27 cell, dataset công khai <code>caapel/SOFC</code> (gắn với Beloev et al., <i>Energies</i> 2025).",
+        "32,843 dòng thô, 47 cảm biến → làm sạch còn <b>14,350 dòng</b> (khớp <i>chính xác</i> số liệu paper công bố) → 5 run sau khi loại 3 run suy biến.",
+        "Thách thức riêng: <b>8 phiên đo rời rạc</b>, cách nhau từ vài giờ đến ~10 tháng → bắt buộc xử lý run-aware (windowing/lag feature không được bắc cầu qua ranh giới phiên đo)."
+      ]
+    },
+    {
+      tag: "b3", num: "§3",
+      title: "Phương pháp — AI như công cụ",
+      summary: "5 kiến trúc, Delta-Target, và 2 kỷ luật đánh giá bắt buộc.",
+      bullets: [
+        "5 kiến trúc thử nghiệm: <b>Random Forest, XGBoost, LSTM, TCN, Seq2Seq LSTM</b>.",
+        "<b>Delta-Target Reformulation</b>: dự đoán biến thiên <code>y(t+h) − y(t)</code> thay vì giá trị thô, để loại bỏ lối tắt \"chép giá trị gần nhất\".",
+        "<b>Persistence baseline bắt buộc</b>: mọi model phải vượt qua \"cứ giữ nguyên giá trị hiện tại\" mới được tính là học được điều gì thật.",
+        "<b>Oracle-decomposition</b>: thay từng biến số bằng giá trị thật để cô lập biến nào là nút thắt cổ chai của độ khó dự đoán.",
+        "<b>Multi-seed validation</b> (5 seed/cấu hình): không rút kết luận từ 1 lần train — kỷ luật bắt buộc với model có yếu tố ngẫu nhiên (LSTM/TCN/Seq2Seq)."
+      ]
+    },
+    {
+      tag: "b4", num: "§4",
+      title: "Kết quả: Ranh giới dự đoán được",
+      summary: "3 câu trả lời thực nghiệm cho 3 câu hỏi con ở §1.",
+      bullets: [],
+      subbranches: [
+        {
+          stag: "(a) Điện áp — dự đoán được thật",
+          text: "LSTM + Delta-Target thắng persistence, có kiểm định multi-seed: h=10 (−4.4%), h=20 (−8.1%). Đây là model đáng tin cậy duy nhất theo hướng \"delta giúp nhiều hơn ở horizon dài\"."
+        },
+        {
+          stag: "(b) Công suất — KHÔNG dự đoán được từ cảm biến",
+          text: "Oracle-decomposition: biết trước V hoàn hảo mà thiếu I vẫn tệ hơn \"không làm gì\"; ngược lại biết trước I giúp giảm sai số 83–85% ở mọi horizon. Nút thắt là I (dòng điện, do operator điều khiển), không phải V."
+        },
+        {
+          stag: "(c) Biết trước lệnh vận hành — có giúp, nhưng nhỏ",
+          text: "Cho model biết trước I(t+h) (mô phỏng 1 bộ điều khiển biết trước setpoint của chính nó) cải thiện dự đoán V — xác nhận chắc chắn ở 2/12 tổ hợp qua multi-seed (LSTM h=5: −12.9%, TCN h=10: −6.7%), xu hướng dương ở 11/12."
+        }
+      ]
+    },
+    {
+      tag: "b5", num: "§5",
+      title: "So sánh Literature SOFC",
+      summary: "4 paper đã đọc/tra cứu — khoảng trống còn lại là gì.",
+      bullets: [
+        "<b>Beloev et al. 2025</b> — paper gốc dataset, chỉ nowcasting.",
+        "<b>Li et al. 2022</b> & <b>Tofigh/Salehi 2024</b> — có true forecasting thật (Encoder-Decoder LSTM/GRU, CNN-NARX) nhưng <b>không</b> persistence-baseline, <b>không</b> delta-target.",
+        "<b>Testasecca et al. 2024</b> — digital twin SOFC, vẫn nowcasting; lặp lại đúng pattern \"tree-based thắng deep learning\" đã thấy ở dataset này.",
+        "→ Khoảng trống: chưa bài nào làm <b>persistence-critique + Delta-Target + phân tích đa horizon tường minh</b> cho SOFC."
+      ]
+    },
+    {
+      tag: "b6", num: "§6",
+      title: "Ý nghĩa kỹ thuật & Khuyến nghị thiết kế",
+      summary: "Nếu đây là 1 hệ thống thật, kỹ sư SOFC nên làm gì khác đi.",
+      bullets: [
+        "Digital twin/hệ giám sát SOFC nên <b>validate bằng persistence-baseline</b> trước khi triển khai bất kỳ model dự đoán nào — tránh triển khai model tệ hơn cả không làm gì.",
+        "Module <b>giám sát điện áp chủ động</b> khả thi ngay với LSTM+Delta, horizon tới 10 phút.",
+        "Dự đoán công suất/năng lượng <b>cần tích hợp lịch trình vận hành</b> (EMS) làm input — không thể đoán mù chỉ từ cảm biến lịch sử.",
+        "Kiến trúc MPC/điều khiển nên nhận <b>setpoint đã biết trước</b> làm input tường minh, không chỉ dữ liệu lịch sử."
+      ]
+    },
+    {
+      tag: "b7", num: "§7",
+      title: "Giới hạn & Hướng mở",
+      summary: "Những gì chưa làm, nói rõ để không bị hỏi bất ngờ.",
+      bullets: [
+        "Chỉ <b>1 hệ SOFC, 1 dataset</b> — chưa tổng quát hoá qua hệ khác.",
+        "Hyperparameter <b>chưa tune riêng</b> cho SOFC (dùng điểm khởi đầu kế thừa từ project trước).",
+        "Chưa có <b>nhãn lỗi thật</b> để kiểm chứng hướng cảnh báo bất thường/fault detection.",
+        "Kiến trúc cho \"biết trước I\" mới ở dạng <b>broadcast thô</b> (1 kênh feature), chưa chuyên sâu như NARX thật."
+      ]
+    }
+  ];
+
+  var container = document.getElementById("branches");
+
+  DATA.forEach(function (b) {
+    var card = document.createElement("article");
+    card.className = "branch";
+    card.style.setProperty("--stem", "var(--" + b.tag + ")");
+
+    var tagRow = document.createElement("div");
+    tagRow.className = "btag";
+    var dot = document.createElement("span");
+    dot.className = "dot";
+    tagRow.appendChild(dot);
+    tagRow.appendChild(document.createTextNode(b.num));
+    card.appendChild(tagRow);
+
+    var h2 = document.createElement("h2");
+    h2.textContent = b.title;
+    card.appendChild(h2);
+
+    var summary = document.createElement("p");
+    summary.className = "summary";
+    summary.textContent = b.summary;
+    card.appendChild(summary);
+
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "toggle";
+    toggle.innerHTML = '<span class="chev">&#9656;</span><span class="label">Xem chi tiết</span>';
+    card.appendChild(toggle);
+
+    var detail = document.createElement("div");
+    detail.className = "detail";
+
+    if (b.bullets && b.bullets.length) {
+      var ul = document.createElement("ul");
+      b.bullets.forEach(function (htmlLine) {
+        var li = document.createElement("li");
+        li.innerHTML = htmlLine;
+        ul.appendChild(li);
+      });
+      detail.appendChild(ul);
+    }
+
+    if (b.subbranches) {
+      b.subbranches.forEach(function (sb) {
+        var box = document.createElement("div");
+        box.className = "subbranch";
+        var stag = document.createElement("div");
+        stag.className = "stag";
+        stag.textContent = sb.stag;
+        var p = document.createElement("p");
+        p.innerHTML = sb.text;
+        box.appendChild(stag);
+        box.appendChild(p);
+        detail.appendChild(box);
+      });
+    }
+
+    card.appendChild(detail);
+
+    toggle.addEventListener("click", function () {
+      var open = card.classList.toggle("open");
+      toggle.querySelector(".label").textContent = open ? "Thu gọn" : "Xem chi tiết";
+    });
+
+    container.appendChild(card);
+  });
+})();
+</script>
+</body>
+</html>
