@@ -1031,3 +1031,21 @@ Chạy xong trên Colab, 15.0 phút, 30/30 lần train không lỗi (3 kiến tr
 **Kết luận cuối cùng cho thực nghiệm 3** (thay thế kết luận "không kết luận được" ở mục 31): biết trước `I(t+h)` (setpoint dòng điện tương lai — thông tin 1 bộ điều khiển thật luôn có sẵn) **có xu hướng thật sự giúp dự đoán `V`**, xác nhận chắc chắn ở 2/12 tổ hợp (LSTM h=5, TCN h=10), khả năng cao ở phần lớn còn lại. Đây là bằng chứng ủng hộ trực tiếp cho hướng đóng khung "V-forecasting làm input cho MPC" (mục 28) — một bộ điều khiển biết trước lịch trình dòng điện của chính nó sẽ dự đoán điện áp đáng tin cậy hơn dự đoán mù.
 
 Kết quả đầy đủ lưu tại `outputs/reports/given_i_multiseed_{raw,summary,verdict}.csv`.
+
+## 34. Multi-seed cho kết luận CHÍNH — Delta-target V vs persistence (`main_delta_vs_persistence_multiseed.py`), soạn xong, chờ chạy Colab
+
+Người dùng đồng ý hướng đi tiếp theo (mục 24.1, gap #1): kết luận cốt lõi nhất của cả project — Seq2Seq-delta thắng persistence, biên độ tăng dần theo horizon, tới -15.3% ở h=20 (mục 19) — trước giờ chỉ dựa **1 lần chạy duy nhất**, chưa qua kiểm định như thực nghiệm 3 (mục 32-33). Áp đúng phương pháp/hạ tầng vừa xây (tham số `seed`, pattern multi-seed) cho claim chính này.
+
+**Script mới `main_delta_vs_persistence_multiseed.py`**: 
+- Tính persistence MAE (số cố định, không cần seed — không train gì) cho `V`, 4 horizon.
+- Train `LSTM-delta`, `TCN-delta`, `Seq2Seq-delta` qua **5 seed** (42-46), lấy mean±std MAE mỗi horizon.
+- Không chạy lại RF/XGBoost-delta (đã tất định do `random_state` cố định, mục 22.2 đủ tin cậy, không cần lặp).
+- Tự kết luận: so `gap = persistence − mean(model)` với `std(model)` — persistence là số cố định nên chỉ cần so lệch khỏi dải `[mean−std, mean+std]` của model, không phải combined std như thực nghiệm 3 (vì phía persistence không có phương sai).
+
+**Đã verify**:
+- `python -m py_compile` — pass.
+- Smoke-test cục bộ (LSTM, 2 seed, 2 epoch): persistence tính ra khớp chính xác số cũ ở mục 22.1 (0.2014/0.7025/1.1434/1.6899) — xác nhận đúng công thức.
+
+**Cập nhật notebook** (42 cell, validate + compile-check pass): thêm mục 7.7 sau 7.6, trước mục 8 — ước ~10-15 phút. Bổ sung file vào check mục 4.
+
+**Trạng thái**: đã soạn + test xong, **chưa chạy trên Colab** — chờ người dùng `git pull` rồi chạy mục 7.7. Đây là bước cuối cùng để đóng lại gap #1 trong checklist "paper-ready" (mục 24.1).
