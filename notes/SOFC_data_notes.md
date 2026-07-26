@@ -935,3 +935,20 @@ Với Seq2Seq (dự đoán cả 4 horizon từ 1 cửa sổ), truyền cả `FOR
 **Cập nhật notebook** (38 cell, `nbformat.validate()` + compile-check từng cell code pass): thêm mục 7.3 "Delta-Target + biết trước I(t+h)" (3 cell, đặt giữa 7.2 và Power — đánh số lại 7.3/7.4/7.5 cho đúng thứ tự, Power lùi xuống 7.4/7.5), bổ sung 3 file vào danh sách check mục 4, bổ sung 3 script vào `ALL_SCRIPTS` của cell gộp mục 7, bổ sung 3 dòng vào bảng so sánh mục 8.
 
 **Trạng thái**: đã soạn + test xong, **chưa chạy trên Colab** — chờ người dùng `git pull` rồi chạy mục 7.3 (hoặc cell gộp mục 7 chạy hết luôn).
+
+## 31. Kết quả thực nghiệm 3 trên Colab (LSTM/TCN/Seq2Seq) — KHÔNG kết luận được, khác RF/XGBoost
+
+Chạy xong qua cell gộp mục 7 (15 script, 9.2 phút, không lỗi). Kết quả delta-target `V` có/không `I(t+h)` (so trong cùng 1 phiên chạy, để loại yếu tố dao động giữa các phiên Colab khác nhau):
+
+| Horizon | LSTM (không I → có I) | TCN | Seq2Seq |
+|---|---|---|---|
+| 1  | 0.198→0.206 (**+4.3%**) | 0.205→0.201 (-2.1%) | 0.281→0.238 (**-15.4%**) |
+| 5  | 0.714→0.628 (**-12.1%**) | 0.657→0.675 (+2.7%) | 0.728→0.780 (+7.0%) |
+| 10 | 1.073→1.109 (+3.3%) | 1.176→1.066 (**-9.4%**) | 1.125→1.212 (+7.8%) |
+| 20 | 1.548→1.535 (-0.8%) | 1.567→1.503 (-4.1%) | 1.488→1.628 (+9.4%) |
+
+**Không có pattern nhất quán** — khác hẳn RF/XGBoost (mục 29: giúp rõ ở h=1, hại dần từ h≥10). Ở đây lúc tốt lúc tệ, không theo horizon, không giống nhau giữa 3 kiến trúc.
+
+**Vấn đề phương pháp luận quan trọng**: so sánh RF/XGBoost ở mục 29 "sạch" vì `random_state` cố định — chỉ khác đúng 1 biến (`I(t+h)` có/không). Còn LSTM/TCN/Seq2Seq có dao động tự nhiên giữa các lần train (dù đã cố định seed, vẫn phụ thuộc GPU/thứ tự batch) — chính bản delta-target "không có I" chạy lại trong phiên này (TCN-delta h1=0.205077) cũng đã lệch khỏi số cũ ở mục 19 (0.208), dù cùng 1 script không đổi gì. Biên độ dao động tự nhiên này (~5-10%) **cùng cỡ** với biên độ thay đổi khi thêm `I(t+h)` (±0.8-15%) → với **n=1 lần chạy mỗi cấu hình**, không tách được tín hiệu thật của `I(t+h)` khỏi nhiễu ngẫu nhiên của quá trình train.
+
+**Kết luận**: thực nghiệm 3 trên deep learning **không kết luận được** với thiết kế hiện tại (thiếu lặp lại nhiều seed để trung bình hoá nhiễu). Khác với thực nghiệm RF/XGBoost (mục 29, kết luận rõ: giúp ở h=1, không giúp/hại ở horizon dài), bản LSTM/TCN/Seq2Seq này dừng lại ở mức "chưa xác nhận được", không phải "đã bác bỏ" — muốn có câu trả lời thật cần chạy lại mỗi cấu hình ≥3-5 lần với seed khác nhau rồi lấy trung bình + độ lệch chuẩn, nằm ngoài phạm vi đã đầu tư cho thực nghiệm này. Coi đây là điểm dừng hợp lý cho hướng thực nghiệm 3, không tiếp tục đào sâu thêm trừ khi có nhu cầu cụ thể.
