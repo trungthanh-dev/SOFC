@@ -694,12 +694,43 @@ Search engine (2 lần query độc lập) mô tả dataset của paper này là
 1. `10.1016/j.jpowsour.2024.234555` — có thật chỉ one-step-ahead không, có so baseline persistence không.
 2. `10.3390/en15176294` — dataset họ dùng có phải chính `caapel/SOFC` không.
 
-### 24.5 Kết luận cập nhật
+### 24.5 Kết luận cập nhật (lúc chưa đọc được full-text)
 
 Tính mới **vẫn có thật nhưng hẹp và khiêm tốn hơn** ban đầu:
 - Không phải "true forecasting trên SOFC" (đã có 2024) → còn lại: **multi-horizon** forecasting + **Delta-Target critique cụ thể** (shrinkage decomposition).
 - Không phải "phát minh diagnostic mới" → là **áp dụng rigor 2025 đang lên (naive-baseline comparison) vào 1 domain/kỹ thuật cụ thể chưa ai làm**, cộng thêm 1 lớp giải thích cơ chế (tree overfit nhiễu vs. DL shrinkage-về-persistence) mà paper tổng quát (Beck et al.) không có.
 - **Trước khi viết bất cứ gì**: phải đọc full-text 2 paper ở mục 24.4 (đặc biệt paper Li et al. 2022 — nếu đúng là cùng dataset thì phải định vị lại hoàn toàn câu chuyện "tính mới").
+
+### 24.6 GIẢI QUYẾT DỨT ĐIỂM — người dùng tự đọc full-text Li et al. 2022 (và tìm thêm 1 paper mới: Testasecca et al. 2024)
+
+Người dùng tự tra cứu, đọc và tóm tắt (dạng trang HTML học bài) 2 paper thật:
+
+**a) Li et al. 2022 — xác nhận KHÔNG trùng dataset, nhưng LÀ prior art thật cho true forecasting:**
+
+| | Li et al. 2022 | `caapel/SOFC` (dataset đang dùng) |
+|---|---|---|
+| Hệ thống | SOFC 1kW, 27 cell, 13×13cm² | SOFC cogeneration 1.5kW, 27 cell |
+| Dữ liệu thô | 629,873 bản ghi, lấy mẫu **1 giây**, 82 đặc trưng | 32,843 dòng, lấy mẫu **30 giây**, 47 cột |
+| Sau nén/lọc | 10,323 bản ghi (nén 1 phút/lần, chọn còn 4 feature qua SFS) | 14,350 dòng (lọc V≠0, giữ nguyên 29 feature) |
+
+Số liệu khác hoàn toàn → **xác nhận con số "32,843/47" nghi vấn ở mục 24.4 đúng là nhiễu AI-search, không phải thật**. 2 hệ SOFC 27-cell độc lập, trùng số cell chỉ là trùng hợp cấu hình phổ biến.
+
+**Nhưng quan trọng hơn**: Li et al. 2022 **có làm true forecasting thật** — sliding time window ("dùng 10 phút đầu dự đoán 10 phút tiếp theo"), kiến trúc **Encoder-Decoder LSTM/GRU** (về bản chất chính là `Seq2SeqLSTMModel` đang dùng trong project này) — **sớm hơn Tofigh/Salehi 2024 tận 2 năm**. → Claim "true forecasting trên SOFC chưa ai làm" (mục 24.2 ban đầu) **chắc chắn sai**, bỏ hẳn.
+
+**3 khoảng trống Li et al. 2022 KHÔNG đụng tới** (đây là tính mới còn lại, xác nhận chắc chắn):
+1. Không so persistence baseline — chỉ so 4 biến thể tự thân (LSTM/GRU gốc vs Encoder-Decoder), không đối chiếu "không làm gì".
+2. Không có Delta-Target Reformulation — train thẳng giá trị thô.
+3. Không phân tích đa horizon có hệ thống — chỉ báo cáo 1 cặp "10 phút vào/ra" tổng hợp, không tách h=1/5/10/20 để xem suy giảm theo horizon.
+
+**b) Phát hiện thêm 1 paper mới (người dùng tự tìm)**: Testasecca et al., "Toward a Digital Twin of a SOFC Microcogenerator: Data-Driven Modelling", *Energies* 2024, 17, 4140 — SOFC micro-CHP thật tại CNR-ITAE Ý, 6 tháng/3935 giờ dữ liệu (dataset khác hẳn). Vẫn là **nowcasting** (dự đoán hiệu suất điện hiện tại từ điều kiện vận hành hiện tại), không có persistence baseline, không có delta-target. Kết quả cùng pattern đã thấy ở mục 1-9: tree-based (RF/XGBoost/GBoost, R²≈0.98-0.99) thắng rõ deep learning (LSTM/ANN, R²≈0.96) trên bài toán nowcasting — không đổi gì về định vị tính mới, nhưng củng cố thêm pattern "tree thắng DL ở nowcasting" đã thấy lặp lại ở dataset thứ 3 độc lập. Điểm hay có thể tham khảo (không liên quan trực tiếp): đánh giá lại model mỗi 500 giờ vận hành, model tốt nhất đổi theo thời gian (model drift) — góc nhìn vận hành thực tế chưa có trong project này.
+
+### 24.7 Định vị tính mới CUỐI CÙNG (đã xác minh qua full-text, không còn nghi vấn)
+
+Không phải "true forecasting trên SOFC" (đã có từ Li et al. 2022, sớm hơn 3 năm) mà là:
+
+> **Critique persistence-baseline có hệ thống (oracle-decomposition, shrinkage analysis) + Delta-Target Reformulation, với phân tích đa horizon (h=1/5/10/20) tường minh, trên dataset công khai mới hơn (`caapel/SOFC`, gắn với paper Beloev 2025) — không paper SOFC nào đã đọc/tra được (Beloev 2025, Tofigh/Salehi 2024, Li et al. 2022, Testasecca et al. 2024) làm cả 2 việc này cùng lúc.**
+
+Đây là claim **hẹp nhưng chắc chắn đúng**, dựa trên 4 paper đã đọc/tra cứu thật (không còn phần "chưa xác minh" như mục 24.4/24.5 trước đó). Sẵn sàng dùng làm khung "Related Work" nếu viết báo.
 
 ## 25. Mở rộng sang dự đoán công suất (W) — bước đầu, RF/XGBoost local
 
@@ -971,3 +1002,32 @@ Người dùng hỏi "cần nhiều seed hơn là sao" → giải thích: seed c
 **Cập nhật notebook** (40 cell, validate + compile-check pass): thêm mục 7.6 (markdown giải thích + 1 cell chạy `main_given_i_multiseed.py`, ước ~15-25 phút) đặt sau 7.5 (Power delta), trước mục 8 (so sánh) — **không** đưa vào `ALL_SCRIPTS` của cell gộp mục 7 (chủ ý để riêng, vì tốn thêm 15-25 phút và output không theo format `*_results.csv` chuẩn mà mục 8 đọc). Bổ sung file vào check mục 4.
 
 **Trạng thái**: đã soạn + test xong, **chưa chạy trên Colab** — chờ người dùng `git pull` rồi chạy mục 7.6.
+
+## 33. Kết quả multi-seed (mục 32 chạy xong) — KẾT LUẬN DỨT ĐIỂM thực nghiệm 3: có hiệu ứng thật, nhỏ, nhất quán
+
+Chạy xong trên Colab, 15.0 phút, 30/30 lần train không lỗi (3 kiến trúc × 2 biến thể × 5 seed).
+
+**Mean ± std MAE (5 seed):**
+
+| Kiến trúc | Horizon | Baseline | Given_I | Gap | % thay đổi | Verdict |
+|---|---|---|---|---|---|---|
+| LSTM | 1 | 0.199±0.008 | 0.201±0.004 | -0.002 | +1.2% | không phân biệt |
+| LSTM | 5 | 0.728±0.026 | 0.634±0.047 | +0.094 | **-12.9%** | **THẬT SỰ TỐT HƠN** |
+| LSTM | 10 | 1.093±0.027 | 1.060±0.080 | +0.033 | -3.1% | không phân biệt |
+| LSTM | 20 | 1.553±0.036 | 1.537±0.049 | +0.016 | -1.0% | không phân biệt |
+| TCN | 1 | 0.203±0.002 | 0.200±0.002 | +0.003 | -1.5% | không phân biệt |
+| TCN | 5 | 0.675±0.018 | 0.652±0.017 | +0.023 | -3.4% | không phân biệt |
+| TCN | 10 | 1.110±0.048 | 1.036±0.023 | +0.075 | **-6.7%** | **THẬT SỰ TỐT HƠN** |
+| TCN | 20 | 1.598±0.046 | 1.521±0.035 | +0.077 | -4.8% | không phân biệt (rất sát ngưỡng) |
+| Seq2Seq | 1 | 0.271±0.042 | 0.229±0.006 | +0.042 | -15.4% | không phân biệt (baseline std lớn) |
+| Seq2Seq | 5 | 0.750±0.027 | 0.719±0.056 | +0.031 | -4.2% | không phân biệt |
+| Seq2Seq | 10 | 1.205±0.074 | 1.126±0.108 | +0.079 | -6.6% | không phân biệt |
+| Seq2Seq | 20 | 1.654±0.141 | 1.538±0.134 | +0.116 | -7.0% | không phân biệt (std rất lớn) |
+
+**Phát hiện chính**: **11/12 trường hợp** given_I có MAE trung bình tốt hơn baseline (không phải phân bố ngẫu nhiên 50/50) — chỉ 1/12 (LSTM h=1) gần như hòa. **2/12 vượt ngưỡng bảo thủ** (gap > tổng 2 std) để khẳng định chắc chắn là hiệu ứng thật: **LSTM h=5 (-12.9%)** và **TCN h=10 (-6.7%)**. Không trường hợp nào cho thấy given_I làm tệ hơn thật sự.
+
+**Diễn giải**: ngưỡng "gap > combined std" là bảo thủ (gần tương đương 2-sigma), nên "không phân biệt được" ở 9/12 trường hợp còn lại **không có nghĩa là không có hiệu ứng** — chỉ là chưa đủ mạnh so với nhiễu (n=5 seed) để khẳng định chắc. Với hướng nhất quán 11/12 cùng chiều dương, nhiều khả năng đây **là hiệu ứng thật nhưng nhỏ** (~1-15%, đa số 3-8%), một phần bị nhiễu train che khuất — đặc biệt rõ ở Seq2Seq (std lên tới 0.14 ở h=20, lớn hơn cả gap).
+
+**Kết luận cuối cùng cho thực nghiệm 3** (thay thế kết luận "không kết luận được" ở mục 31): biết trước `I(t+h)` (setpoint dòng điện tương lai — thông tin 1 bộ điều khiển thật luôn có sẵn) **có xu hướng thật sự giúp dự đoán `V`**, xác nhận chắc chắn ở 2/12 tổ hợp (LSTM h=5, TCN h=10), khả năng cao ở phần lớn còn lại. Đây là bằng chứng ủng hộ trực tiếp cho hướng đóng khung "V-forecasting làm input cho MPC" (mục 28) — một bộ điều khiển biết trước lịch trình dòng điện của chính nó sẽ dự đoán điện áp đáng tin cậy hơn dự đoán mù.
+
+Kết quả đầy đủ lưu tại `outputs/reports/given_i_multiseed_{raw,summary,verdict}.csv`.
