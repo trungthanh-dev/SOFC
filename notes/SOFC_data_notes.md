@@ -919,3 +919,19 @@ Script mới `src/main_v_given_i.py`: nhét thêm `I(t+h)` (lấy qua `create_sl
 Kết quả lưu tại `outputs/reports/v_given_i_results.csv`.
 
 **Kết luận thực nghiệm 3**: giả thuyết "biết trước I giúp dự đoán V" — **đúng nhưng chỉ ở horizon ngắn (h=1, có thể tới h=5 với XGBoost-delta)**, và cách nhét thẳng feature phẳng cho RF/XGBoost là quá thô để khai thác hết tiềm năng. Muốn làm đúng kiểu NARX (paper Tofigh/Salehi, mục 24 — cho exogenous input 1 kênh riêng thay vì trộn vào window) cần thử trên kiến trúc sequence (LSTM/TCN/Seq2Seq, Colab) — **chưa làm**, là bước hợp lý tiếp theo nếu muốn đẩy hướng MPC-support xa hơn.
+
+## 30. Thực nghiệm 3 trên LSTM/TCN/Seq2Seq — hàm mới `augment_with_future_exogenous()`, soạn xong, chờ chạy Colab
+
+Thay vì nhét `I(t+h)` phẳng vào vector (như bản RF/XGBoost, mục 29), thêm hàm mới `windowing.augment_with_future_exogenous(X_window, X_df, exo_series, run_id, window_size, horizons)`: broadcast `exo(t+h)` (ở đây là `I(t+h)`) thành 1 kênh feature riêng lặp lại dọc theo toàn bộ `window_size` bước thời gian, nối vào cuối chiều feature — không làm phẳng, không cần sửa code model (LSTM/TCN/Seq2Seq đều tự dò `input_size` từ `X.shape[2]`). Tái dùng `create_sliding_window()` áp lên chính cột `I` để lấy `I(t+h)` đúng vị trí, giống cách làm ở mục 29.
+
+Với Seq2Seq (dự đoán cả 4 horizon từ 1 cửa sổ), truyền cả `FORECAST_HORIZONS` — mỗi horizon 1 kênh riêng (`I(t+1)`, `I(t+5)`, `I(t+10)`, `I(t+20)`), mô phỏng đúng 1 bộ điều khiển thật biết trước **toàn bộ** lịch trình dòng điện sắp đặt ra, không chỉ bước kế tiếp.
+
+**Bug phát hiện khi smoke-test (không phải do người dùng báo)**: `create_seq2seq_window_delta()` dùng `max(horizons)` để tính số sample, trong khi `create_sliding_window()` (dùng để lấy `I(t+h)` riêng từng horizon) tính theo đúng `h` đó — với `h < max(horizons)` (VD h=1,5,10), số sample trả về **nhiều hơn** số sample của cửa sổ Seq2Seq → lệch shape khi nối. Sửa bằng cách cắt `future_vals` về đúng `X_window.shape[0]` đầu tiên trước khi ghép (2 cách windowing lặp cùng thứ tự từ `i=0` mỗi run nên cắt đầu vẫn giữ đúng alignment — cùng logic đã dùng để hợp lệ hoá alignment seq2seq ở mục 22.3).
+
+**3 script mới** (`main_lstm_delta_given_i.py`, `main_tcn_delta_given_i.py`, `main_seq2seq_delta_given_i.py`) — chỉ làm delta-target (bản đã chứng minh tốt nhất cho `V`, mục 19/22), mirror đúng `main_{lstm,tcn,seq2seq}_delta.py` cộng thêm bước augment. Đã:
+- `python -m py_compile` cả 3 file + `windowing.py` — pass.
+- Smoke-test đầy đủ (2 epoch, CPU) cho cả 3 kiến trúc: shape đúng (33→34 kênh cho LSTM/TCN, 33→37 cho Seq2Seq), train/predict chạy không lỗi.
+
+**Cập nhật notebook** (38 cell, `nbformat.validate()` + compile-check từng cell code pass): thêm mục 7.3 "Delta-Target + biết trước I(t+h)" (3 cell, đặt giữa 7.2 và Power — đánh số lại 7.3/7.4/7.5 cho đúng thứ tự, Power lùi xuống 7.4/7.5), bổ sung 3 file vào danh sách check mục 4, bổ sung 3 script vào `ALL_SCRIPTS` của cell gộp mục 7, bổ sung 3 dòng vào bảng so sánh mục 8.
+
+**Trạng thái**: đã soạn + test xong, **chưa chạy trên Colab** — chờ người dùng `git pull` rồi chạy mục 7.3 (hoặc cell gộp mục 7 chạy hết luôn).

@@ -118,3 +118,45 @@ def create_seq2seq_window_delta(X: pd.DataFrame, y: pd.Series, run_id: pd.Series
 def reshape_for_random_forest(X: np.ndarray):
     """Reshape 3D sliding-window data into 2D for Random Forest / XGBoost."""
     return X.reshape(X.shape[0], -1)
+
+
+def augment_with_future_exogenous(X_window, X_df, exo_series, run_id, window_size, horizons):
+    """
+    Append known-in-advance future value(s) of an exogenous series (e.g. I,
+    the operator-set current setpoint -- known to whoever sets it, unlike a
+    target that must be forecast) as extra feature channel(s) on a 3D
+    sliding window, for sequence models (LSTM/TCN/Seq2Seq). One channel per
+    horizon in `horizons`, each holding exo(t+h) broadcast across all
+    window_size timesteps (a constant-covariate injection -- no model-code
+    changes needed since input_size is auto-detected from X.shape[2]).
+
+    For a direct-forecast model (one model per horizon), pass a single-
+    element `horizons` list. For Seq2Seq (predicts all horizons from one
+    window), pass the full horizons list -- this mirrors a real controller
+    knowing its whole planned command trajectory, not just the next step.
+
+    Reuses create_sliding_window() on the exogenous column itself so the
+    alignment (same run-aware windows, same sample order) matches X_window
+    exactly -- see notes/SOFC_data_notes.md section 29 (RF/XGBoost version
+    of this same idea, done via flat concatenation instead).
+
+    Returns
+    -------
+    (samples, window_size, n_features + len(horizons))
+    """
+    n_samples = X_window.shape[0]
+    channels = []
+    for h in horizons:
+        _, future_vals = create_sliding_window(X_df, exo_series, run_id, window_size=window_size, horizon=h)
+        # A single horizon's own windowing (n = len(run) - window_size - h + 1)
+        # can yield more samples than a multi-horizon window built against
+        # max(horizons) (Seq2Seq's n = len(run) - window_size - max(horizons) + 1).
+        # Both iterate the same run from i=0 in the same order, so truncating
+        # to the shared count keeps every sample's window position aligned.
+        assert len(future_vals) >= n_samples, (
+            f"h={h}: got {len(future_vals)} future values, need at least {n_samples} "
+            "to align with X_window -- horizons must not exceed X_window's own max horizon"
+        )
+        future_vals = future_vals[:n_samples]
+        channels.append(np.repeat(future_vals[:, None, None], window_size, axis=1))
+    return np.concatenate([X_window] + channels, axis=2)
