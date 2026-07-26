@@ -808,3 +808,15 @@ Cả 6 file đã syntax-check qua `python -m py_compile` — pass.
 - Mục 9 (ghi chú) bổ sung 1 dòng nhắc tải kết quả Power về local giống cách đã làm với Voltage (mục 20).
 
 **Trạng thái**: đã soạn xong, **chưa chạy trên Colab** — chờ người dùng mở notebook, `git pull` để lấy 6 file mới, rồi chạy lần lượt mục 7c/7d.
+
+### 25.7 Sự cố: người dùng chạy nhầm mục 7/7b (V) tưởng là kết quả Power, gộp notebook thành 1 cell
+
+Người dùng paste bảng kết quả tưởng là Power nhưng thực ra là **Voltage** (khớp gần đúng mục 16/19: LSTM raw h1 MAE=1.093, TCN raw h1=1.295...) — do notebook cấu trúc nhiều cell rời (mục 7→7b→7c→7d→8), dễ chạy nhầm/dừng giữa chừng mà không nhận ra thiếu phần Power.
+
+**Yêu cầu người dùng**: gộp lại thành 1 nút bấm duy nhất (`Runtime -> Run all` chạy hết, không cần bấm từng cell theo thứ tự).
+
+**Xử lý**: thêm mục **7 mới** (1 markdown + 1 code cell) ngay sau mục 6 (check GPU) — code cell dùng `subprocess.run()` lặp qua **cả 12 script** (V raw×3, V delta×3, Power raw×3, Power delta×3) tuần tự, in tiến trình rõ ràng theo từng script, **không dừng cả pipeline nếu 1 script lỗi** (chỉ ghi nhận vào danh sách `failed` rồi chạy tiếp), tổng kết thời gian + danh sách lỗi (nếu có) ở cuối. 4 mục cũ (7/7b/7c/7d) đổi tên thành sub-section **7.1-7.4** ("chạy riêng"), giữ nguyên để dùng khi chỉ muốn train lại đúng 1 model cụ thể (không phải chạy lại cả 12 script).
+
+**Bug phát hiện khi tự kiểm tra (không phải người dùng báo)**: cell code mới ban đầu bị lỗi cú pháp — 1 số ký tự escape `\n` bên trong f-string một dòng bị hỏng thành newline thật trong lúc soạn (transport qua nhiều lớp JSON/heredoc làm mất 1 lớp escape), gây `SyntaxError: unterminated f-string literal`. Phát hiện bằng cách tự `compile()` từng cell code trước khi giao — đã sửa bằng cách tách `SEP = "="*80` ra biến riêng, không nhúng `\n` vào f-string 1 dòng nữa. Đã verify lại toàn bộ 34 cell qua `compile()` (chỉ cell 6 — `%cd`/`!git` lồng trong `if/else` — bị flag, nhưng đó là cú pháp IPython magic hợp lệ trong Colab, không phải lỗi thật, đã dùng từ trước).
+
+**Bài học cho lần sau**: khi soạn code cell cho notebook (đặc biệt qua nbformat + heredoc/exec nhiều lớp), **luôn `compile()` từng cell code trước khi ghi file**, không chỉ `nbformat.validate()` (validate chỉ kiểm tra cấu trúc JSON của notebook, không kiểm tra cú pháp Python bên trong cell).
