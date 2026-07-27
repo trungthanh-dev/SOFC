@@ -1,6 +1,49 @@
-# Ranh giới dự đoán được của hệ SOFC: Methodology, Results, Discussion (bản thảo)
+# Ranh giới dự đoán được của hệ SOFC: từ dữ liệu vận hành thực đến khuyến nghị thiết kế giám sát (bản thảo)
 
 *Khung chủ đạo: SOFC là trọng tâm, AI là công cụ để trả lời câu hỏi kỹ thuật "cái gì dự đoán trước được để hỗ trợ vận hành/giám sát hệ SOFC, cái gì không, và vì sao". Dùng số liệu đã kiểm định cuối cùng (multi-seed, mục 35 của `SOFC_data_notes.md`), không dùng số liệu 1-lần-chạy đã bị sửa lại.*
+
+---
+
+## Tóm tắt (Abstract)
+
+Hệ thống pin nhiên liệu ôxít rắn (SOFC) cogeneration ngày càng được triển khai thực tế, nhưng phần lớn công cụ dữ liệu-hoá (data-driven) công bố cho SOFC — bao gồm cả công bố gốc gắn với bộ dữ liệu dùng trong nghiên cứu này — chỉ dừng ở mức **nowcasting** (ước lượng trạng thái hiện tại từ cảm biến đo cùng thời điểm), không hỗ trợ được quyết định vận hành *chủ động*. Nghiên cứu này đặt lại câu hỏi theo hướng kỹ thuật: với 1 hệ SOFC cogeneration 1.5kW thật, **cái gì dự đoán trước được để hỗ trợ giám sát/vận hành, cái gì không, và vì sao** — dùng học sâu như công cụ trả lời, không phải như đích đến. Trên dữ liệu vận hành thực (32.843 bản ghi, 8 phiên đo rời rạc trải dài 10 tháng), 5 kiến trúc học máy/học sâu được huấn luyện theo cấu trúc *run-aware* để dự đoán điện áp (`V`) và công suất (`W`) tại 4 horizon (30 giây–10 phút), đánh giá bằng 1 khung phương pháp luận gồm 4 công cụ: đối chiếu baseline persistence bắt buộc, chẩn đoán shrinkage/correlation, phân rã nhân quả kiểu oracle-substitution, và kiểm định đa seed. Kết quả: điện áp có thể dự đoán tin cậy ở horizon từ 5 phút trở lên bằng LSTM kết hợp Delta-Target Reformulation (thắng persistence có kiểm định thống kê, tới −8.1% MAE ở h=10 phút); công suất, ngược lại, gần như không dự đoán được từ lịch sử cảm biến thuần túy — thực nghiệm oracle-decomposition chứng minh nút thắt nằm ở dòng điện (đại lượng do operator/tải quyết định, mang bản chất ngoại sinh), không phải điện áp. Khi thông tin đó được cung cấp trước (mô phỏng 1 bộ điều khiển biết trước lệnh của chính mình), khả năng dự đoán điện áp cải thiện thêm, có kiểm định thống kê. Các kết luận này chuyển hóa thành khuyến nghị thiết kế cụ thể cho hệ giám sát/digital twin SOFC, đồng thời — qua 1 trường hợp cụ thể trong đó kiểm định đa seed đảo ngược hoàn toàn 1 kết luận ban đầu — minh họa vì sao kỷ luật thống kê này không thể là bước tùy chọn khi đánh giá các kiến trúc học sâu có yếu tố ngẫu nhiên.
+
+---
+
+## 1. Introduction
+
+### 1.1. Bối cảnh và động lực
+
+Pin nhiên liệu ôxít rắn (Solid Oxide Fuel Cell — SOFC) là công nghệ phát điện tĩnh hiệu suất cao, vận hành ở nhiệt độ 600–1000°C, ngày càng được triển khai dưới dạng hệ cogeneration (đồng phát điện–nhiệt) quy mô nhỏ cho khu dân cư/thương mại. Vì mô hình vật lý đầy đủ của SOFC (điện hoá + truyền nhiệt + động lực dòng khí) đòi hỏi chi phí tính toán lớn, các phương pháp dữ liệu-hoá (data-driven, "hộp đen") ngày càng được ưa chuộng để mô phỏng nhanh hành vi hệ thống, phục vụ giám sát tình trạng, tối ưu vận hành và bảo trì dự phòng.
+
+Công bố gần nhất gắn với bộ dữ liệu dùng trong nghiên cứu này (Beloev et al., 2025) đã chứng minh các mô hình cây quyết định (Random Forest, XGBoost) ước lượng điện áp SOFC rất chính xác — nhưng đó là bài toán **nowcasting**: ước lượng điện áp `V` tại thời điểm `t` từ toàn bộ cảm biến khác *đo cùng thời điểm t*. Bài toán này hữu ích để thay thế cảm biến điện áp bằng ước lượng gián tiếp, nhưng không trả lời được câu hỏi mà người vận hành/hệ thống giám sát thực sự cần: **hệ thống sẽ ra sao trong vài phút tới**, để có thể cảnh báo sớm hoặc điều chỉnh vận hành trước khi sự việc xảy ra.
+
+### 1.2. Khoảng trống nghiên cứu
+
+Rà soát 4 công bố liên quan trực tiếp nhất tới dự đoán dữ liệu-hoá cho SOFC (chi tiết đối chiếu ở mục 4.2) cho thấy: 2 công bố duy nhất thực sự làm **true forecasting** (dự đoán tương lai chỉ từ quá khứ, không có thông tin tại/sau thời điểm dự đoán) trên dữ liệu SOFC — Li et al. (2022, kiến trúc Encoder-Decoder LSTM/GRU) và Tofigh/Salehi (2024, kiến trúc CNN-NARX one-step-ahead) — đều **không đối chiếu kết quả với baseline persistence** (dự đoán "không đổi" so với hiện tại) và **không áp dụng Delta-Target Reformulation**. Đây không phải thiếu sót nhỏ: như thực nghiệm ở mục 3.1 cho thấy, bản thân baseline persistence trên tín hiệu điện áp SOFC đã rất mạnh (R² > 0.87 ở mọi horizon thử nghiệm), khiến việc không đối chiếu với nó tạo rủi ro thật là công bố 1 model tưởng "chính xác" (MAE/R² cao) nhưng thực chất tệ hơn "không làm gì" — đúng như phát hiện ở nghiên cứu này đối với phần lớn model raw-target và cả 1 số cấu hình delta-target (mục 3.1, 3.2).
+
+Từ khoảng trống đó, nghiên cứu đặt ra câu hỏi kỹ thuật trung tâm:
+
+> **Với dữ liệu cảm biến lịch sử của 1 hệ SOFC cogeneration thật, cái gì dự đoán trước được để hỗ trợ vận hành/giám sát, cái gì không, và vì sao?**
+
+cụ thể hoá thành 3 câu hỏi con dẫn dắt toàn bộ phần Results (mục 3):
+
+- **(a)** Điện áp `V` — tín hiệu phản ứng điện hoá của ngăn xếp — có dự đoán trước được không?
+- **(b)** Công suất `W` — đại lượng trực tiếp phục vụ điều phối năng lượng — có dự đoán trước được không?
+- **(c)** Nếu biết trước 1 phần lệnh vận hành tương lai (như 1 bộ điều khiển thật sẽ biết trước setpoint của chính nó), khả năng dự đoán có cải thiện không?
+
+### 1.3. Đóng góp
+
+Nghiên cứu này đóng góp theo 4 hướng cụ thể, đã xác minh không trùng lặp với 4 công bố SOFC liên quan trực tiếp nhất (mục 4.2):
+
+1. **Khung đánh giá kết hợp persistence-baseline bắt buộc + Delta-Target Reformulation + phân tích tường minh theo 4 horizon** (30 giây–10 phút) cho bài toán dự báo SOFC — kết hợp mà không công bố nào đã tra cứu áp dụng đồng thời.
+2. **Công cụ chẩn đoán oracle-decomposition**, cô lập chính xác đóng góp của từng biến vật lý vào độ khó dự đoán 1 đại lượng phân rã được về đại số (ở đây `W=V×I`) — một công cụ khái quát hoá được cho các bài toán tương tự.
+3. **Bằng chứng thực nghiệm cụ thể, có kiểm định thống kê, về ranh giới forecastable/non-forecastable** giữa 2 tín hiệu SOFC quan trọng nhất (điện áp và công suất), cùng cách diễn giải vật lý (nội sinh vs. ngoại sinh) cho ranh giới đó.
+4. **Khuyến nghị thiết kế kỹ thuật cụ thể** cho hệ giám sát/digital twin SOFC (mục 4.3), cùng 1 minh chứng thực nghiệm — không phải chỉ lý thuyết — cho tầm quan trọng của kiểm định đa seed khi đánh giá kiến trúc học sâu (mục 4.4).
+
+### 1.4. Cấu trúc bài báo
+
+Mục 2 trình bày phương pháp: hệ thống và dữ liệu, cấu trúc run-aware, 2 cách đặt bài toán (raw/delta-target), kiến trúc model, và khung đánh giá 4 công cụ. Mục 3 trình bày kết quả thực nghiệm theo đúng 3 câu hỏi con ở mục 1.2. Mục 4 thảo luận: tổng hợp diễn giải, định vị so với literature, khuyến nghị thiết kế, bài học phương pháp luận, và giới hạn. Mục 5 kết luận.
 
 ---
 
@@ -210,3 +253,13 @@ Ngoài 2 vấn đề đã trình bày chi tiết ở mục 4.2 và 4.4, quá tr�
 ### 4.6. Giới hạn
 
 Nghiên cứu này giới hạn ở 1 hệ SOFC, 1 bộ dữ liệu công khai duy nhất — chưa có cơ sở để khẳng định các phát hiện (đặc biệt ranh giới forecastable/non-forecastable giữa `V` và `W`) tổng quát hóa cho mọi cấu hình SOFC khác. Hyperparameter của các kiến trúc deep learning kế thừa từ 1 nghiên cứu dự báo khác (không cùng domain), chưa được tinh chỉnh riêng cho dữ liệu SOFC. Hướng "biết trước lệnh vận hành" (mục 3.4) mới thử nghiệm với cách ghép kênh đặc trưng đơn giản (broadcast), chưa áp dụng kiến trúc NARX chuyên biệt như một số công bố liên quan. Cuối cùng, do bộ dữ liệu không có nhãn sự cố/lỗi vận hành thực tế, hướng ứng dụng "cảnh báo bất thường" dựa trên residual dự báo — dù có cơ sở lý thuyết từ chính kết quả ở đây — chưa được kiểm chứng thực nghiệm.
+
+---
+
+## 5. Kết luận
+
+Nghiên cứu này đặt lại bài toán dự đoán dữ liệu-hoá cho hệ SOFC cogeneration theo hướng kỹ thuật thay vì hướng benchmark thuật toán: không hỏi "model nào có MAE thấp nhất", mà hỏi **cái gì trong hệ thống thật sự dự đoán trước được, để hỗ trợ vận hành/giám sát, và vì sao**. Ba câu trả lời thực nghiệm, mỗi câu đều được kiểm định thống kê thay vì dựa trên 1 lần chạy đơn lẻ, cùng vẽ nên 1 ranh giới rõ ràng và có thể diễn giải bằng vật lý: **điện áp** — phản ứng điện hoá nội tại của ngăn xếp — dự đoán trước được ở horizon từ 5 phút trở lên, bằng LSTM kết hợp Delta-Target Reformulation; **công suất** — bị chi phối bởi dòng điện, 1 đại lượng ngoại sinh do quyết định vận hành quyết định — về cơ bản không dự đoán trước được nếu chỉ dùng lịch sử cảm biến, nhưng cải thiện rõ rệt (giảm 83–85% sai số) nếu biết trước chính đại lượng ngoại sinh đó; và khi thông tin ngoại sinh tương tự được cung cấp cho bài toán dự đoán điện áp, hiệu năng cải thiện thêm, có kiểm định.
+
+Về mặt định vị khoa học, đóng góp của nghiên cứu không nằm ở việc "lần đầu tiên dự đoán tương lai cho SOFC" — quá trình rà soát literature (mục 4.2) xác nhận điều này đã có công bố trước, sớm nhất từ 2022 — mà nằm ở việc lần đầu tiên kết hợp 1 cách hệ thống: đối chiếu bắt buộc với persistence baseline, Delta-Target Reformulation, phân tích tường minh theo nhiều horizon, và công cụ oracle-decomposition để cô lập nguyên nhân gốc rễ của độ khó dự đoán — 1 tổ hợp phương pháp luận chưa xuất hiện trong 4 công bố SOFC liên quan trực tiếp nhất đã đọc/tra cứu được. Tổ hợp này trực tiếp dẫn tới 4 khuyến nghị thiết kế cụ thể cho kỹ sư xây dựng hệ giám sát/digital twin SOFC (mục 4.3), và — qua chính trường hợp Seq2Seq-delta bị đảo ngược kết luận sau kiểm định đa seed (mục 3.1, 4.4) — để lại 1 bài học phương pháp luận có thể áp dụng rộng hơn phạm vi SOFC: bất kỳ kết luận nào về hiệu năng của kiến trúc học sâu có yếu tố ngẫu nhiên, nếu chỉ dựa trên 1 lần huấn luyện, đều cần được xem là giả thuyết cần kiểm định, không phải kết quả cuối cùng.
+
+Hướng phát triển tiếp theo hợp lý nhất, theo đúng thứ tự ưu tiên rút ra từ giới hạn ở mục 4.6, là: (i) áp dụng lại toàn bộ khung đánh giá này trên 1 hệ SOFC thứ 2 để kiểm tra tính tổng quát của ranh giới forecastable/non-forecastable; (ii) thay thế cách ghép kênh ngoại sinh dạng broadcast (mục 3.4) bằng kiến trúc NARX chuyên biệt để khai thác triệt để hơn thông tin setpoint đã biết trước; và (iii) khi có dữ liệu nhãn sự cố vận hành thực tế, kiểm chứng thực nghiệm hướng cảnh báo bất thường dựa trên residual dự báo mà kết quả ở đây gợi ý là khả thi về mặt lý thuyết.
