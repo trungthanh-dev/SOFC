@@ -178,7 +178,7 @@ $$\mathbf{X}'_t = \mathbf{X}_t \,\Vert\, \big(\underbrace{I_{t+h}, \ldots, I_{t+
 
 Công suất — đại lượng trực tiếp liên quan đến quyết định điều phối năng lượng — là 1 bài toán khó hơn điện áp về bản chất. Persistence-floor của `W` sập rất nhanh theo horizon (R² từ 0.91 ở h=1 xuống còn **0.008** ở h=20 — gần như không còn giá trị dự báo), phản ánh việc công suất có thể đổi bậc thang đột ngột khi hệ chuyển mode vận hành (500/1000/1500W).
 
-Toàn bộ **10/12 tổ hợp model** (5 kiến trúc × raw/delta, trừ 2 trường hợp) đều thua persistence ở mọi horizon. Duy nhất **Seq2Seq (raw-target, không phải delta) tại h=20 thắng thật** (−6.0% so với persistence) — trường hợp thắng duy nhất trong toàn bộ 24 tổ hợp model×horizon đã thử cho công suất. Delta-Target Reformulation, vốn hiệu quả rõ rệt cho điện áp, ở đây chỉ có tác dụng kéo raw-target *về gần bằng* persistence (không vượt qua), và mất hẳn ý nghĩa ở horizon dài.
+Tính đầy đủ trên cả 5 kiến trúc (RF, XGBoost, LSTM, TCN, Seq2Seq) × 2 biến thể (raw/delta) × 4 horizon = 40 tổ hợp model×horizon, **39/40 tổ hợp đều thua persistence**. Duy nhất **Seq2Seq (raw-target, không phải delta) tại h=20 thắng thật** (−6.0% so với persistence) — trường hợp thắng duy nhất trong toàn bộ 40 tổ hợp đã thử cho công suất. Delta-Target Reformulation, vốn hiệu quả rõ rệt cho điện áp, ở đây chỉ có tác dụng kéo raw-target *về gần bằng* persistence (không vượt qua), và mất hẳn ý nghĩa ở horizon dài.
 
 **Kết luận (b): công suất về cơ bản KHÔNG dự đoán trước được từ lịch sử cảm biến thuần túy** — đây không phải hạn chế của model mà là hạn chế cấu trúc của bài toán, được làm rõ dứt điểm ở mục 3.3.
 
